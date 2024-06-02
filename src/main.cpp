@@ -1,6 +1,7 @@
-// MIT License
-//
 // Copyright (c) 2024 Kevin Venalainen
+//
+// This file is part of KissFFT++.
+//
 
 #include <iostream>
 

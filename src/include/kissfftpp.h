@@ -1,8 +1,7 @@
-// MIT License
-//
 // Copyright (c) 2024 Kevin Venalainen
 //
-// This is the main header file for the kissfftpp library.
+// This file is part of KissFFT++.
+//
 
 #ifndef KISS_FFT_PP_H
 #define KISS_FFT_PP_H
@@ -18,7 +17,7 @@
 #define KFFTPP_PI 3.1415926535897932384626433832795028841972L
 #endif // KFFTPP_PI
 
-namespace kissfftpp {
+namespace kfft {
 
 // Main FFT class.
 class FFT {
@@ -30,6 +29,6 @@ public:
   void fft(const float *x, float *y, const size_t len) const noexcept {}
 };
 
-} // namespace kissfftpp
+} // namespace kfft
 
 #endif // KISS_FFT_PP_H
