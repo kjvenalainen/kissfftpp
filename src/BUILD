@@ -3,6 +3,13 @@ load("@rules_cc//cc:defs.bzl", "cc_binary", "cc_test")
 
 package(default_visibility = ["//visibility:public"])
 
+refresh_compile_commands(
+    name = "refresh_compile_commands",
+    targets = [
+        "*",
+    ],
+)
+
 # Compile the original kissfft library.
 cc_library(
   name = "kissfft",
