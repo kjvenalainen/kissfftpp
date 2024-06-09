@@ -7,4 +7,8 @@ cc_library(
     "kissfftpp.h",
   ],
   visibility = ["//visibility:public"],
+  copts = [
+    "-O3",
+    "-ffast-math",
+  ],
 )

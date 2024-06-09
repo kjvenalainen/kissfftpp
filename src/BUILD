@@ -16,6 +16,10 @@ cc_library(
   hdrs = glob(["kissfft/*.h"]),
   srcs = glob(["kissfft/*.c"]),
   visibility = ["//visibility:public"],
+  copts = [
+    "-O3",
+    "-ffast-math",
+  ],
 )
 
 cc_binary(
@@ -40,7 +44,8 @@ cc_test(
   deps = [
     "@gtest",
     "@gtest//:gtest_main",
-    "//src/include:kissfftpp",
     ":kissfft",
+    "//src/include:kissfftpp",
+
   ],
 )
