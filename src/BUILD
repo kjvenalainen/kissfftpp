@@ -22,10 +22,18 @@ cc_library(
   ],
 )
 
+# Compile the KissFFT++ header.
+cc_library(
+  name = "kissfftpp",
+  hdrs = ["include/kissfftpp.h"],
+  visibility = ["//visibility:public"],
+  includes = ["include"],
+)
+
 cc_binary(
   name = "main",
   deps = [
-    "//src/include:kissfftpp",
+    ":kissfftpp",
     ":kissfft",
   ],
   srcs = [
@@ -36,6 +44,7 @@ cc_binary(
 # The main unit test binary.
 cc_test(
   name = "gtest",
+  features = ["parse_headers"],
   srcs = [
     "testUtils.h",
     "testDataKissfft.h",
@@ -44,8 +53,14 @@ cc_test(
   deps = [
     "@gtest",
     "@gtest//:gtest_main",
+    ":kissfftpp",
     ":kissfft",
-    "//src/include:kissfftpp",
-
   ],
+  copts = [
+    "-Wall",
+    "-Wextra",
+    "-Wpedantic",
+    "-Wsign-conversion",
+    "-Wsign-compare",
+  ]
 )

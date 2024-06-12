@@ -195,20 +195,20 @@ class span {
   static constexpr size_t ALL = SIZE_MAX;
 
   // Constructors.
-  span(T* ptr, size_t size) noexcept : ptr_(ptr), size_(size) {}
-  span(const span&) = default;
-  span(span&&) = default;
+  constexpr span(T* ptr, size_t size) noexcept : ptr_(ptr), size_(size) {}
+  constexpr span(const span&) = default;
+  constexpr span(span&&) = default;
 
   // Accessors.
-  T* data() const noexcept { return ptr_; }
-  size_t size() const noexcept { return size_; }
-  T& operator[](size_t i) const {
+  constexpr T* data() const noexcept { return ptr_; }
+  constexpr size_t size() const noexcept { return size_; }
+  constexpr T& operator[](size_t i) const {
     KFFTPP_ASSERT(i < size_, "Index out of bounds");
     return ptr_[i];
   }
 
   // Create a subspan of this span.
-  span subspan(size_t offset, size_t count = ALL) const {
+  constexpr span subspan(size_t offset, size_t count = ALL) const {
     KFFTPP_ASSERT(offset <= size_, "Offset out of bounds");
     KFFTPP_ASSERT(count == ALL || offset + count <= size_,
                   "Count out of bounds");
@@ -236,10 +236,11 @@ static constexpr std::vector<internal::complex<T>> ComputeTwiddles(
 
 // Given a FFT length N, factorize it into a sequence of `p, m` pairs where `p`
 // is the FFT radix and `m` is the length of the FFT at that stage.
-static std::vector<int> Factorize(size_t N) {
-  auto factors = std::vector<int>();
-  int p = 4;
-  double floorSqrt = std::floor(std::sqrt(static_cast<double>(N)));
+static std::vector<size_t> Factorize(size_t N) {
+  auto factors = std::vector<size_t>();
+  size_t p = 4;
+  const auto floorSqrt =
+      static_cast<size_t>(std::floor(std::sqrt(static_cast<double>(N))));
   do {
     while (N % p) {
       switch (p) {
@@ -265,8 +266,9 @@ static std::vector<int> Factorize(size_t N) {
 // Given a factorized FFT, compute the maximum required scratch array length for
 // the generic butterfly operations. If there are no generic butterflies, then
 // the scratch space required is 0.
-static constexpr size_t RequiredScratchLength(const std::vector<int>& factors) {
-  constexpr std::array<int, 4> NON_GENERIC_BUTTERFLY_RADICES = {2, 3, 4, 5};
+static constexpr size_t RequiredScratchLength(
+    const std::vector<size_t>& factors) {
+  constexpr std::array<size_t, 4> NON_GENERIC_BUTTERFLY_RADICES = {2, 3, 4, 5};
 
   size_t scratchLength = 0;
   for (size_t i = 0; i < factors.size(); i += 2) {
@@ -429,11 +431,11 @@ template <typename T>
 static constexpr void FftRecursive(
     const internal::span<const T> x, internal::span<T> y,
     const size_t inputStride, const size_t factorStride,
-    const size_t recursionIndex, const std::vector<int>& factors,
+    const size_t recursionIndex, const internal::span<size_t> factors,
     const std::vector<internal::complex<float>>& twiddles, const size_t N,
     std::vector<internal::complex<float>>& scratch) {
-  const int p = factors[2 * recursionIndex];  // FFT radix for this stage.
-  const int m =
+  const auto p = factors[2 * recursionIndex];  // FFT radix for this stage.
+  const auto m =
       factors[2 * recursionIndex + 1];  // Length of this FFT stage / radix.
 
   if (m == 1) {
@@ -496,13 +498,14 @@ class FFT {
     internal::FftRecursive<internal::complex<float>>(
         internal::span<const internal::complex<float>>(x_.data(), N_),
         internal::span<internal::complex<float>>(y_.data(), N_), 1, 1, 0,
-        factors_, twiddles_, N_, scratch_);
+        internal::span<size_t>(factors_.data(), factors_.size()), twiddles_, N_,
+        scratch_);
   }
 
  private:
   size_t N_;
   bool inverse_;
-  std::vector<int> factors_;
+  std::vector<size_t> factors_;
   std::vector<internal::complex<float>> twiddles_;
   std::vector<internal::complex<float>> scratch_;
 };

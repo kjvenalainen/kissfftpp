@@ -17,7 +17,7 @@ using namespace kfftTestData;
 // Tests for kfft::internal::complex
 TEST(KissFftppInternal, Complex) {
   kfft::internal::complex<float> c0(1, 2);
-  kfft::internal::complex<float> c1(3, 4);
+  constexpr kfft::internal::complex<float> c1(3, 4);
 
   // Accessors.
   EXPECT_EQ(c0.real(), 1);
@@ -182,54 +182,58 @@ TEST(KissFftpp, KissFftpp) {
 }
 
 TEST(KissFftpp, KissFftCompare) {
-  constexpr static size_t N = 1560;
-  std::vector<kiss_fft_cpx> x0(N);
-  std::vector<kiss_fft_cpx> y0(N, {0, 0});
+  for (size_t N = 2; N < 1800; N++) {
+    std::vector<kiss_fft_cpx> x0(N);
+    std::vector<kiss_fft_cpx> y0(N, {0, 0});
 
-  auto kfft = kiss_fft_alloc(N, 0, NULL, 0);
-  EXPECT_NE(kfft, nullptr);
+    auto kfft = kiss_fft_alloc(N, 0, NULL, 0);
+    EXPECT_NE(kfft, nullptr);
 
-  for (size_t i = 0; i < N; i++) {
-    x0[i] = {KISS_FFT_X_512[i], 0};
-  }
+    for (size_t i = 0; i < N; i++) {
+      x0[i] = {static_cast<float>(rand()) / RAND_MAX,
+               static_cast<float>(rand()) / RAND_MAX};
+    }
 
-  kiss_fft(kfft, x0.data(), y0.data());
+    kiss_fft(kfft, x0.data(), y0.data());
 
-  std::vector<std::complex<float>> x1(N);
-  std::vector<std::complex<float>> y1(N, {0, 0});
+    std::vector<std::complex<float>> x1(N);
+    std::vector<std::complex<float>> y1(N, {0, 0});
 
-  kfft::FFT kfftpp(N, false);
+    kfft::FFT kfftpp(N, false);
 
-  for (size_t i = 0; i < N; i++) {
-    x1[i] = {KISS_FFT_X_512[i], 0};
-  }
+    for (size_t i = 0; i < N; i++) {
+      x1[i] = {x0[i].r, x0[i].i};
+    }
 
-  kfftpp.fft(x1, y1);
+    kfftpp.fft(x1, y1);
 
-  // Print y with 7 decimals precision
-  // for (size_t i = 0; i < KISS_FFT_X_512.size(); i++) {
-  //   std::cout << "{ " << std::fixed << std::setprecision(7) << y[i].real() <<
-  //   ", "
-  //             << y[i].imag() << "}, ";
-  // }
+    // Print y with 7 decimals precision
+    // for (size_t i = 0; i < KISS_FFT_X_512.size(); i++) {
+    //   std::cout << "{ " << std::fixed << std::setprecision(7) << y[i].real()
+    //   <<
+    //   ", "
+    //             << y[i].imag() << "}, ";
+    // }
 
-  // for (size_t i = 0; i < N; i++) {
-  //   std::cout << "{ " << std::fixed << std::setprecision(7) << y0[i].r << ",
-  //   "
-  //             << y0[i].i << "}, ";
-  // }
+    // for (size_t i = 0; i < N; i++) {
+    //   std::cout << "{ " << std::fixed << std::setprecision(7) << y0[i].r <<
+    //   ",
+    //   "
+    //             << y0[i].i << "}, ";
+    // }
 
-  // std::cout << std::endl << std::endl;
+    // std::cout << std::endl << std::endl;
 
-  // for (size_t i = 0; i < N; i++) {
-  //   std::cout << "{ " << std::fixed << std::setprecision(7) << y1[i].real()
-  //             << ", " << y1[i].imag() << "}, ";
-  // }
+    // for (size_t i = 0; i < N; i++) {
+    //   std::cout << "{ " << std::fixed << std::setprecision(7) << y1[i].real()
+    //             << ", " << y1[i].imag() << "}, ";
+    // }
 
-  for (size_t i = 0; i < N; i++) {
-    const auto norm = std::sqrt(y0[i].r * y0[i].r + y0[i].i * y0[i].i);
-    EXPECT_NEAR(y0[i].r, y1[i].real(), 1e-3 * norm);
-    EXPECT_NEAR(y0[i].i, y1[i].imag(), 1e-3 * norm);
+    for (size_t i = 0; i < N; i++) {
+      const auto norm = std::sqrt(y0[i].r * y0[i].r + y0[i].i * y0[i].i);
+      EXPECT_NEAR(y0[i].r, y1[i].real(), 1e-3 * norm);
+      EXPECT_NEAR(y0[i].i, y1[i].imag(), 1e-3 * norm);
+    }
   }
 }
 

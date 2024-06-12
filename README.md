@@ -3,10 +3,11 @@
 A reasonably fast, zero-dependency, header-only FFT implementation for modern C++ inspired by the excellent [KissFFT](https://github.com/mborgerding/kissfft) library.
 
 ## Features
-- Modern C++ API
+- Single-file, header only
+- Targets C++14 or later
+- Modern C++ API with minimal global namespcae pollution
 - Supports both real and complex input data
-- Thread safe
-- Portable and cross-platform
+- No onl-the-fly memory allocations during FFT computation
 
 ## Installation
 To use KissFFT++ in your C++ project, all you need to do is include the single-header from `src/include/kissfftpp.h`.
