@@ -13,6 +13,11 @@
 
 namespace helper {
 
+// EXPECT_NEAR with relative error rather than absolute error.
+#define EXPECT_NEAR_RELATIVE(val0, val1, errorPercent) \
+  EXPECT_NEAR(val0, val0,                              \
+              std::max(std::abs(val0), std::abs(val1)) * errorPercent / 100)
+
 // Calls the given function with the tuple elements as arguments.
 template <typename Function, typename Tuple, size_t... I>
 auto Call(Function f, Tuple t, std::index_sequence<I...>) {

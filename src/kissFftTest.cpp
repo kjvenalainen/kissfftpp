@@ -129,110 +129,29 @@ TEST(KissFftppInternal, RequiredScratchLength) {
   EXPECT_EQ(kfft::internal::RequiredScratchLength({6, 1, 13, 2}), 13);
 }
 
-TEST(KissFft, KissFft) {
-  auto kfft = kiss_fft_alloc(512, 0, NULL, 0);
-  EXPECT_NE(kfft, nullptr);
+// Assert correct outputs for complex<float> input and output.
+TEST(KissFftpp, CorrectnessComplexFloat) {
+  for (size_t index = 0; index < TEST_FFT_SIZES.size(); index++) {
+    size_t length = TEST_FFT_SIZES[index];
 
-  std::vector<kiss_fft_cpx> x(KISS_FFT_X_512.size());
-  std::vector<kiss_fft_cpx> y(KISS_FFT_X_512.size(), {0, 0});
+    std::vector<std::complex<float>> x(length);
+    std::vector<std::complex<float>> y(length, {0, 0});
 
-  for (size_t i = 0; i < KISS_FFT_X_512.size(); i++) {
-    x[i].r = KISS_FFT_X_512[i];
-    x[i].i = 0;
-  }
+    auto kfftpp = kfft::FFT(length, false);
 
-  kiss_fft(kfft, x.data(), y.data());
-
-  // Print y with 7 decimals precision
-  // for (size_t i = 0; i < KISS_FFT_X_512.size(); i++) {
-  //   std::cout << "{ " << std::fixed << std::setprecision(7) << y[i].r << ", "
-  //             << y[i].i << "}, ";
-  // }
-
-  for (size_t i = 0; i < KISS_FFT_X_512.size(); i++) {
-    EXPECT_NEAR(y[i].r, KISS_FFT_Y_512[i].r, 1e-3);
-    EXPECT_NEAR(y[i].i, KISS_FFT_Y_512[i].i, 1e-3);
-  }
-
-  kiss_fft_free(kfft);
-}
-
-TEST(KissFftpp, KissFftpp) {
-  kfft::FFT kfft(512, false);
-  auto x = std::vector<std::complex<float>>(KISS_FFT_X_512.size());
-  auto y = std::vector<std::complex<float>>(KISS_FFT_X_512.size(), {0, 0});
-
-  for (size_t i = 0; i < KISS_FFT_X_512.size(); i++) {
-    x[i] = {KISS_FFT_X_512[i], 0};
-  }
-
-  kfft.fft(x, y);
-
-  // Print y with 7 decimals precision
-  // for (size_t i = 0; i < KISS_FFT_X_512.size(); i++) {
-  //   std::cout << "{ " << std::fixed << std::setprecision(7) << y[i].real() <<
-  //   ", "
-  //             << y[i].imag() << "}, ";
-  // }
-
-  for (size_t i = 0; i < KISS_FFT_X_512.size(); i++) {
-    EXPECT_NEAR(y[i].real(), KISS_FFT_Y_512[i].r, 1e-3);
-    EXPECT_NEAR(y[i].imag(), KISS_FFT_Y_512[i].i, 1e-3);
-  }
-}
-
-TEST(KissFftpp, KissFftCompare) {
-  for (size_t N = 2; N < 1800; N++) {
-    std::vector<kiss_fft_cpx> x0(N);
-    std::vector<kiss_fft_cpx> y0(N, {0, 0});
-
-    auto kfft = kiss_fft_alloc(N, 0, NULL, 0);
-    EXPECT_NE(kfft, nullptr);
-
-    for (size_t i = 0; i < N; i++) {
-      x0[i] = {static_cast<float>(rand()) / RAND_MAX,
-               static_cast<float>(rand()) / RAND_MAX};
+    for (size_t i = 0; i < length; i++) {
+      x[i] = {TEST_DATA_INPUT[2 * i], TEST_DATA_INPUT[2 * i + 1]};
     }
 
-    kiss_fft(kfft, x0.data(), y0.data());
+    kfftpp.fft(x, y);
 
-    std::vector<std::complex<float>> x1(N);
-    std::vector<std::complex<float>> y1(N, {0, 0});
-
-    kfft::FFT kfftpp(N, false);
-
-    for (size_t i = 0; i < N; i++) {
-      x1[i] = {x0[i].r, x0[i].i};
-    }
-
-    kfftpp.fft(x1, y1);
-
-    // Print y with 7 decimals precision
-    // for (size_t i = 0; i < KISS_FFT_X_512.size(); i++) {
-    //   std::cout << "{ " << std::fixed << std::setprecision(7) << y[i].real()
-    //   <<
-    //   ", "
-    //             << y[i].imag() << "}, ";
-    // }
-
-    // for (size_t i = 0; i < N; i++) {
-    //   std::cout << "{ " << std::fixed << std::setprecision(7) << y0[i].r <<
-    //   ",
-    //   "
-    //             << y0[i].i << "}, ";
-    // }
-
-    // std::cout << std::endl << std::endl;
-
-    // for (size_t i = 0; i < N; i++) {
-    //   std::cout << "{ " << std::fixed << std::setprecision(7) << y1[i].real()
-    //             << ", " << y1[i].imag() << "}, ";
-    // }
-
-    for (size_t i = 0; i < N; i++) {
-      const auto norm = std::sqrt(y0[i].r * y0[i].r + y0[i].i * y0[i].i);
-      EXPECT_NEAR(y0[i].r, y1[i].real(), 1e-3 * norm);
-      EXPECT_NEAR(y0[i].i, y1[i].imag(), 1e-3 * norm);
+    for (size_t i = 0; i < length; i++) {
+      EXPECT_NEAR_RELATIVE(
+          y[i].real(), TEST_DATA_OUTPUT_COMPLEX_FLOAT[index][i].real(), 0.0001)
+          << "index: " << index << " i: " << i;
+      EXPECT_NEAR_RELATIVE(
+          y[i].imag(), TEST_DATA_OUTPUT_COMPLEX_FLOAT[index][i].imag(), 0.0001)
+          << "index: " << index << " i: " << i;
     }
   }
 }
@@ -325,4 +244,50 @@ TEST(KissFftpp, KissFftPerformance) {
             << std::endl;
   std::cout << "KissFFTPP: " << durationKissFftpp.count() << " seconds"
             << std::endl;
+}
+
+TEST(KissFft, PrintTestData) {
+  for (size_t index = 0; index < TEST_FFT_SIZES.size(); index++) {
+    size_t length = TEST_FFT_SIZES[index];
+    std::vector<kiss_fft_cpx> x(length);
+    std::vector<kiss_fft_cpx> y(length, {0, 0});
+
+    auto kfft = kiss_fft_alloc(length, 0, NULL, 0);
+    EXPECT_NE(kfft, nullptr);
+
+    for (size_t i = 0; i < length; i++) {
+      x[i] = {TEST_DATA_INPUT[2 * i], TEST_DATA_INPUT[2 * i + 1]};
+    }
+
+    kiss_fft(kfft, x.data(), y.data());
+
+    // Print with 7 decimal precision.
+    std::cout << std::fixed << std::setprecision(7);
+    std::cout << "constexpr static std::array<std::complex<float>, " << length
+              << "> TEST_DATA_OUTPUT_COMPLEX_FLOAT_" << length << " = { ";
+    for (size_t i = 0; i < length; i++) {
+      std::cout << "std::complex<float>(" << y[i].r << "," << y[i].i << "), ";
+    }
+    std::cout << "};" << std::endl;
+
+    kiss_fft_free(kfft);
+
+    for (size_t i = 0; i < length; i++) {
+      EXPECT_NEAR(y[i].r, TEST_DATA_OUTPUT_COMPLEX_FLOAT[index][i].real(), 1e-3)
+          << "index: " << index << " i: " << i;
+      EXPECT_NEAR(y[i].i, TEST_DATA_OUTPUT_COMPLEX_FLOAT[index][i].imag(), 1e-3)
+          << "index: " << index << " i: " << i;
+    }
+  }
+
+  std::cout << " constexpr static std::array<kfft::internal::span<const "
+               "std::complex<float>>, "
+            << TEST_FFT_SIZES.size() << "> TEST_DATA_OUTPUT_COMPLEX_FLOAT = {";
+  for (size_t index = 0; index < TEST_FFT_SIZES.size(); index++) {
+    std::cout << "kfft::internal::span<const "
+                 "std::complex<float>>(&TEST_DATA_OUTPUT_COMPLEX_FLOAT_"
+              << TEST_FFT_SIZES[index] << "[0], " << TEST_FFT_SIZES[index]
+              << "), ";
+  }
+  std::cout << "};" << std::endl;
 }
