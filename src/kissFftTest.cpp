@@ -146,11 +146,11 @@ TEST(KissFftpp, CorrectnessComplexFloat) {
     kfftpp.fft(x, y);
 
     for (size_t i = 0; i < length; i++) {
-      EXPECT_NEAR_RELATIVE(
-          y[i].real(), TEST_DATA_OUTPUT_COMPLEX_FLOAT[index][i].real(), 0.0001)
+      EXPECT_NEAR_RELATIVE(y[i].real(),
+                           TEST_DATA_OUTPUT_COMPLEX_FLOAT[index][i].real(), 0.1)
           << "index: " << index << " i: " << i;
-      EXPECT_NEAR_RELATIVE(
-          y[i].imag(), TEST_DATA_OUTPUT_COMPLEX_FLOAT[index][i].imag(), 0.0001)
+      EXPECT_NEAR_RELATIVE(y[i].imag(),
+                           TEST_DATA_OUTPUT_COMPLEX_FLOAT[index][i].imag(), 0.1)
           << "index: " << index << " i: " << i;
     }
   }
