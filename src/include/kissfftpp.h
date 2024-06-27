@@ -43,9 +43,9 @@
 // runtime checks will be performed, and std::logic_error will be thrown.
 // 3. KFFTPP_NO_CONTRACT_CHECKING is false, and KFFTPP_NO_EXCEPTIONS is true -
 // runtime checks will be performed, and std::terminate will be called.
-#if defined(KFFTPP_NO_CONTRACT_CHECKING)
+#if KFFTPP_NO_CONTRACT_CHECKING
 #define KFFTPP_ASSERT(cond, msg) ((void)0)
-#elif defined(KFFTPP_NO_EXCEPTIONS)
+#elif KFFTPP_NO_EXCEPTIONS
 #define KFFTPP_ASSERT(cond, msg) \
   if (!(cond)) {                 \
     std::terminate();            \
