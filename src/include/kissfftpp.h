@@ -16,7 +16,9 @@
 // If not explicitly set, then enable based on debug status.
 #ifndef KFFTPP_NO_CONTRACT_CHECKING
 #if defined(NDEBUG)
-#define KFFTPP_NO_CONTRACT_CHECKING
+#define KFFTPP_NO_CONTRACT_CHECKING 1
+#else
+#define KFFTPP_NO_CONTRACT_CHECKING 0
 #endif
 #endif
 
@@ -24,11 +26,13 @@
 // flags.
 #ifndef KFFTPP_NO_EXCEPTIONS
 #if !(defined(__cpp_exceptions) || defined(__EXCEPTIONS) || defined(_CPPUNWIND))
-#define KFFTPP_NO_EXCEPTIONS
+#define KFFTPP_NO_EXCEPTIONS 1
+#else
+#define KFFTPP_NO_EXCEPTIONS 0
 #endif
 #endif
 
-#if !defined(KFFTPP_NO_EXCEPTIONS) && !defined(KFFTPP_NO_CONTRACT_CHECKING)
+#if !KFFTPP_NO_EXCEPTIONS && !KFFTPP_NO_CONTRACT_CHECKING
 #include <stdexcept>
 #endif
 
@@ -138,7 +142,30 @@ class span {
   extent_type<Extent> size_;
 };
 
-// Deduction Guides
+// Performs no scaling for forward or inverse FFTs.
+struct NoScaling {
+  template <typename T, bool Inverse>
+  static constexpr T Scale(const T& x, const float& /* N */) {
+    return x;
+  }
+};
+
+// Scales forward FFT by 1, and inverse by 1/N. This matches with MATLAB's FFT.
+struct InverseOneByNScaling {
+  // Forward FFT scales by 1.
+  template <typename T, bool Inverse,
+            typename std::enable_if_t<!Inverse, bool> = true>
+  static constexpr T Scale(const T& x, const float& /* N */) {
+    return x;
+  }
+
+  // Inverse FFT scales by 1/N.
+  template <typename T, bool Inverse,
+            typename std::enable_if_t<Inverse, bool> = true>
+  static constexpr T Scale(const T& x, const float& N) {
+    return x / N;
+  }
+};
 
 namespace internal {
 
@@ -336,7 +363,7 @@ static constexpr size_t RequiredScratchLength(
   return scratchLength;
 }
 
-template <typename T>
+template <typename T, bool Inverse>
 static constexpr void Butterfly2(
     span<T> x, const size_t stride,
     const std::vector<internal::complex<float>>& twiddles, const size_t m) {
@@ -347,7 +374,7 @@ static constexpr void Butterfly2(
   }
 }
 
-template <typename T>
+template <typename T, bool Inverse>
 static constexpr void Butterfly3(
     span<T> x, const size_t stride,
     const std::vector<internal::complex<float>>& twiddles, const size_t m) {
@@ -370,7 +397,8 @@ static constexpr void Butterfly3(
   }
 }
 
-template <typename T>
+template <typename T, bool Inverse,
+          typename std::enable_if_t<!Inverse, bool> = true>
 static constexpr void Butterfly4(
     span<T> x, const size_t stride,
     const std::vector<internal::complex<float>>& twiddles, const size_t m) {
@@ -388,13 +416,36 @@ static constexpr void Butterfly4(
     x[m2 + i] = x[i] - xi[3];
     x[i] += xi[3];
 
-    // TODO: Different for inverse.
     x[m + i] = {xi[5].real() + xi[4].imag(), xi[5].imag() - xi[4].real()};
     x[m3 + i] = {xi[5].real() - xi[4].imag(), xi[5].imag() + xi[4].real()};
   }
 }
 
-template <typename T>
+template <typename T, bool Inverse,
+          typename std::enable_if_t<Inverse, bool> = true>
+static constexpr void Butterfly4(
+    span<T> x, const size_t stride,
+    const std::vector<internal::complex<float>>& twiddles, const size_t m) {
+  const size_t m2 = 2 * m;
+  const size_t m3 = 3 * m;
+  for (size_t i = 0; i < m; ++i) {
+    std::array<T, 6> xi;
+    xi[0] = x[m + i] * twiddles[i * stride];
+    xi[1] = x[m2 + i] * twiddles[i * 2 * stride];
+    xi[2] = x[m3 + i] * twiddles[i * 3 * stride];
+    xi[3] = xi[0] + xi[2];
+    xi[4] = xi[0] - xi[2];
+    xi[5] = x[i] - xi[1];
+    x[i] += xi[1];
+    x[m2 + i] = x[i] - xi[3];
+    x[i] += xi[3];
+
+    x[m + i] = {xi[5].real() - xi[4].imag(), xi[5].imag() + xi[4].real()};
+    x[m3 + i] = {xi[5].real() + xi[4].imag(), xi[5].imag() - xi[4].real()};
+  }
+}
+
+template <typename T, bool Inverse>
 static constexpr void Butterfly5(
     span<T> x, const size_t stride,
     const std::vector<internal::complex<float>>& twiddles, const size_t m) {
@@ -447,7 +498,7 @@ static constexpr void Butterfly5(
   }
 }
 
-template <typename T>
+template <typename T, bool Inverse>
 static constexpr void ButterflyGeneric(
     span<T> x, const size_t stride,
     const std::vector<internal::complex<float>>& twiddles, const size_t m,
@@ -472,7 +523,7 @@ static constexpr void ButterflyGeneric(
   }
 }
 
-template <typename T>
+template <typename T, bool Inverse, typename Scaling>
 static constexpr void FftRecursive(
     const span<T> x, span<T> y, const size_t inputStride,
     const size_t factorStride, const size_t recursionIndex,
@@ -484,37 +535,39 @@ static constexpr void FftRecursive(
       factors[2 * recursionIndex + 1];  // Length of this FFT stage / radix.
 
   if (m == 1) {
-    // Copy strided input to output.
+    // Copy strided input to output, scaling as needed.
     for (size_t i = 0; i < p * m; ++i) {
-      y[i] = x[i * inputStride * factorStride];
+      y[i] = Scaling::template Scale<T, Inverse>(
+          x[i * inputStride * factorStride], N);
     }
   } else {
     for (size_t i = 0; i < p; ++i) {
       // Decimation in time algorithm:
       // Perform p instances of smaller DFTs of size m,
       // each one with a decimated (srided) input.
-      FftRecursive(x.subspan(i * factorStride * inputStride), y.subspan(i * m),
-                   inputStride, factorStride * p, recursionIndex + 1, factors,
-                   twiddles, N, scratch);
+      FftRecursive<T, Inverse, Scaling>(
+          x.subspan(i * factorStride * inputStride), y.subspan(i * m),
+          inputStride, factorStride * p, recursionIndex + 1, factors, twiddles,
+          N, scratch);
     }
   }
 
   // Recombine the p smaller DFTs.
   switch (p) {
     case 2:
-      Butterfly2(y, factorStride, twiddles, m);
+      Butterfly2<T, Inverse>(y, factorStride, twiddles, m);
       break;
     case 3:
-      Butterfly3(y, factorStride, twiddles, m);
+      Butterfly3<T, Inverse>(y, factorStride, twiddles, m);
       break;
     case 4:
-      Butterfly4(y, factorStride, twiddles, m);
+      Butterfly4<T, Inverse>(y, factorStride, twiddles, m);
       break;
     case 5:
-      Butterfly5(y, factorStride, twiddles, m);
+      Butterfly5<T, Inverse>(y, factorStride, twiddles, m);
       break;
     default:
-      ButterflyGeneric(y, factorStride, twiddles, m, p, N, scratch);
+      ButterflyGeneric<T, Inverse>(y, factorStride, twiddles, m, p, N, scratch);
       break;
   }
 }
@@ -524,29 +577,44 @@ static constexpr void FftRecursive(
 // Main FFT class.
 class FFT {
  public:
-  FFT(size_t N, bool inverse) noexcept
+  FFT(size_t N) noexcept
       : N_(N),
-        inverse_(inverse),
         factors_(internal::Factorize(N_)),
-        twiddles_(internal::ComputeTwiddles<float>(N_, inverse_)),
+        twiddlesForward_(internal::ComputeTwiddles<float>(N_, false)),
+        twiddlesInverse_(internal::ComputeTwiddles<float>(N_, true)),
         scratch_(internal::RequiredScratchLength(factors_)) {}
   FFT(const FFT&) = default;
+  FFT& operator=(const FFT&) = default;
   FFT(FFT&&) = default;
+  FFT& operator=(FFT&&) = default;
 
+  // Forward complex-to-complex FFT.
+  template <typename Scaling = InverseOneByNScaling>
   void fft(const std::vector<std::complex<float>>& x,
            std::vector<std::complex<float>>& y) noexcept {
     // Convert to internal complex type.
     auto& x_ = reinterpret_cast<const span<kfft::internal::complex<float>>&>(x);
     auto& y_ = reinterpret_cast<span<kfft::internal::complex<float>>&>(y);
-    internal::FftRecursive<internal::complex<float>>(x_, y_, 1, 1, 0, factors_,
-                                                     twiddles_, N_, scratch_);
+    internal::FftRecursive<internal::complex<float>, false, Scaling>(
+        x_, y_, 1, 1, 0, factors_, twiddlesForward_, N_, scratch_);
+  }
+
+  // Inverse complex-to-complex FFT.
+  template <typename Scaling = InverseOneByNScaling>
+  void ifft(const std::vector<std::complex<float>>& x,
+            std::vector<std::complex<float>>& y) noexcept {
+    // Convert to internal complex type.
+    auto& x_ = reinterpret_cast<const span<kfft::internal::complex<float>>&>(x);
+    auto& y_ = reinterpret_cast<span<kfft::internal::complex<float>>&>(y);
+    internal::FftRecursive<internal::complex<float>, true, Scaling>(
+        x_, y_, 1, 1, 0, factors_, twiddlesInverse_, N_, scratch_);
   }
 
  private:
   size_t N_;
-  bool inverse_;
   std::vector<size_t> factors_;
-  std::vector<internal::complex<float>> twiddles_;
+  std::vector<internal::complex<float>> twiddlesForward_;
+  std::vector<internal::complex<float>> twiddlesInverse_;
   std::vector<internal::complex<float>> scratch_;
 };
 

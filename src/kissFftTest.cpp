@@ -137,13 +137,13 @@ TEST(KissFftpp, CorrectnessComplexFloat) {
     std::vector<std::complex<float>> x(length);
     std::vector<std::complex<float>> y(length, {0, 0});
 
-    auto kfftpp = kfft::FFT(length, false);
+    auto kfftpp = kfft::FFT(length);
 
     for (size_t i = 0; i < length; i++) {
       x[i] = {TEST_DATA_INPUT[2 * i], TEST_DATA_INPUT[2 * i + 1]};
     }
 
-    kfftpp.fft(x, y);
+    kfftpp.fft<kfft::InverseOneByNScaling>(x, y);
 
     for (size_t i = 0; i < length; i++) {
       EXPECT_NEAR_RELATIVE(y[i].real(),
@@ -151,6 +151,28 @@ TEST(KissFftpp, CorrectnessComplexFloat) {
           << "index: " << index << " i: " << i;
       EXPECT_NEAR_RELATIVE(y[i].imag(),
                            TEST_DATA_OUTPUT_COMPLEX_FLOAT[index][i].imag(), 0.1)
+          << "index: " << index << " i: " << i;
+    }
+
+    // Test inverse, asserting that iffft(fft(x)) = x (with default 1/N scaling
+    // on the inverse).
+    kfftpp.ifft<kfft::InverseOneByNScaling>(y, x);
+
+    for (size_t i = 0; i < length; i++) {
+      EXPECT_NEAR_RELATIVE(x[i].real(), TEST_DATA_INPUT[2 * i], 0.1)
+          << "index: " << index << " i: " << i;
+      EXPECT_NEAR_RELATIVE(x[i].imag(), TEST_DATA_INPUT[2 * i + 1], 0.1)
+          << "index: " << index << " i: " << i;
+    }
+
+    // Test inverse with no scaling, resulting in iffft(fft(x)) = x * N.
+    kfftpp.ifft<kfft::NoScaling>(y, x);
+
+    for (size_t i = 0; i < length; i++) {
+      EXPECT_NEAR_RELATIVE(x[i].real(), TEST_DATA_INPUT[2 * i] * length, 0.1)
+          << "index: " << index << " i: " << i;
+      EXPECT_NEAR_RELATIVE(x[i].imag(), TEST_DATA_INPUT[2 * i + 1] * length,
+                           0.1)
           << "index: " << index << " i: " << i;
     }
   }
@@ -170,7 +192,7 @@ TEST(KissFftpp, KissFftPerformance) {
   std::vector<std::complex<float>> x1(N);
   std::vector<std::complex<float>> y1(N, {0, 0});
 
-  kfft::FFT kfftpp(N, false);
+  kfft::FFT kfftpp(N);
 
   kiss_fft(kfft, x0.data(), y0.data());
   kfftpp.fft(x1, y1);
@@ -206,7 +228,7 @@ TEST(KissFftpp, KissFftPerformance) {
       // Measure KissFFTPP exeuction time.
       start = std::chrono::high_resolution_clock::now();
 
-      kfftpp.fft(x1, y1);
+      kfftpp.fft<kfft::NoScaling>(x1, y1);
 
       end = std::chrono::high_resolution_clock::now();
       durationKissFftpp +=
@@ -246,7 +268,7 @@ TEST(KissFftpp, KissFftPerformance) {
             << std::endl;
 }
 
-TEST(KissFft, PrintTestData) {
+TEST(KissFft, DISABLED_PrintTestData) {
   for (size_t index = 0; index < TEST_FFT_SIZES.size(); index++) {
     size_t length = TEST_FFT_SIZES[index];
     std::vector<kiss_fft_cpx> x(length);

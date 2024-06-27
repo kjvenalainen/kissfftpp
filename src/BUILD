@@ -50,6 +50,10 @@ cc_test(
     "testDataKissfft.h",
     "kissFftTest.cpp",
   ],
+  defines = [
+    "KFFTPP_NO_CONTRACT_CHECKING=0",
+    "KFFTPP_NO_EXCEPTIONS=0",
+  ],
   deps = [
     "@gtest",
     "@gtest//:gtest_main",
