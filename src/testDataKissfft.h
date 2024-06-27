@@ -2600,39 +2600,39 @@ constexpr static std::array<std::complex<float>, 512>
         std::complex<float>(-70010.8593750, 209597.1875000),
         std::complex<float>(194658.9062500, 549950.8750000),
 };
-constexpr static std::array<kfft::internal::span<const std::complex<float>>, 16>
+constexpr static std::array<kfft::span<const std::complex<float>>, 16>
     TEST_DATA_OUTPUT_COMPLEX_FLOAT = {
-        kfft::internal::span<const std::complex<float>>(
+        kfft::span<const std::complex<float>>(
             &TEST_DATA_OUTPUT_COMPLEX_FLOAT_2[0], 2),
-        kfft::internal::span<const std::complex<float>>(
+        kfft::span<const std::complex<float>>(
             &TEST_DATA_OUTPUT_COMPLEX_FLOAT_3[0], 3),
-        kfft::internal::span<const std::complex<float>>(
+        kfft::span<const std::complex<float>>(
             &TEST_DATA_OUTPUT_COMPLEX_FLOAT_4[0], 4),
-        kfft::internal::span<const std::complex<float>>(
+        kfft::span<const std::complex<float>>(
             &TEST_DATA_OUTPUT_COMPLEX_FLOAT_5[0], 5),
-        kfft::internal::span<const std::complex<float>>(
+        kfft::span<const std::complex<float>>(
             &TEST_DATA_OUTPUT_COMPLEX_FLOAT_6[0], 6),
-        kfft::internal::span<const std::complex<float>>(
+        kfft::span<const std::complex<float>>(
             &TEST_DATA_OUTPUT_COMPLEX_FLOAT_7[0], 7),
-        kfft::internal::span<const std::complex<float>>(
+        kfft::span<const std::complex<float>>(
             &TEST_DATA_OUTPUT_COMPLEX_FLOAT_8[0], 8),
-        kfft::internal::span<const std::complex<float>>(
+        kfft::span<const std::complex<float>>(
             &TEST_DATA_OUTPUT_COMPLEX_FLOAT_9[0], 9),
-        kfft::internal::span<const std::complex<float>>(
+        kfft::span<const std::complex<float>>(
             &TEST_DATA_OUTPUT_COMPLEX_FLOAT_18[0], 18),
-        kfft::internal::span<const std::complex<float>>(
+        kfft::span<const std::complex<float>>(
             &TEST_DATA_OUTPUT_COMPLEX_FLOAT_24[0], 24),
-        kfft::internal::span<const std::complex<float>>(
+        kfft::span<const std::complex<float>>(
             &TEST_DATA_OUTPUT_COMPLEX_FLOAT_120[0], 120),
-        kfft::internal::span<const std::complex<float>>(
+        kfft::span<const std::complex<float>>(
             &TEST_DATA_OUTPUT_COMPLEX_FLOAT_279[0], 279),
-        kfft::internal::span<const std::complex<float>>(
+        kfft::span<const std::complex<float>>(
             &TEST_DATA_OUTPUT_COMPLEX_FLOAT_360[0], 360),
-        kfft::internal::span<const std::complex<float>>(
+        kfft::span<const std::complex<float>>(
             &TEST_DATA_OUTPUT_COMPLEX_FLOAT_441[0], 441),
-        kfft::internal::span<const std::complex<float>>(
+        kfft::span<const std::complex<float>>(
             &TEST_DATA_OUTPUT_COMPLEX_FLOAT_480[0], 480),
-        kfft::internal::span<const std::complex<float>>(
+        kfft::span<const std::complex<float>>(
             &TEST_DATA_OUTPUT_COMPLEX_FLOAT_512[0], 512),
 };
 

@@ -87,10 +87,10 @@ TEST(KissFftppInternal, Complex) {
   EXPECT_EQ(c14.real(), -1);
 }
 
-// Tests for kfft::internal::span
+// Tests for kfft::span
 TEST(KissFftppInternal, Span) {
   std::vector<float> v = {1, 2, 3, 4, 5};
-  kfft::internal::span<float> s(v.data(), v.size());
+  kfft::span<float> s(v.data(), v.size());
 
   // Accessors.
   EXPECT_EQ(s.size(), v.size());
@@ -280,11 +280,11 @@ TEST(KissFft, PrintTestData) {
     }
   }
 
-  std::cout << " constexpr static std::array<kfft::internal::span<const "
+  std::cout << " constexpr static std::array<kfft::span<const "
                "std::complex<float>>, "
             << TEST_FFT_SIZES.size() << "> TEST_DATA_OUTPUT_COMPLEX_FLOAT = {";
   for (size_t index = 0; index < TEST_FFT_SIZES.size(); index++) {
-    std::cout << "kfft::internal::span<const "
+    std::cout << "kfft::span<const "
                  "std::complex<float>>(&TEST_DATA_OUTPUT_COMPLEX_FLOAT_"
               << TEST_FFT_SIZES[index] << "[0], " << TEST_FFT_SIZES[index]
               << "), ";

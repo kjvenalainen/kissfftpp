@@ -9,7 +9,8 @@
 #include <complex>
 #include <cstddef>
 #include <cstdint>
-#include <span>
+#include <limits>
+#include <type_traits>
 #include <vector>
 
 // If not explicitly set, then enable based on debug status.
@@ -61,6 +62,83 @@
 #endif  // KFFTPP_PI
 
 namespace kfft {
+
+// Same as std::dynamic_extent from C++20.
+constexpr size_t dynamic_extent = std::numeric_limits<std::size_t>::max();
+
+// Lightweight span implementation.
+template <typename T, size_t Extent = dynamic_extent>
+class span {
+  template <size_t E>
+  struct extent_type {
+    constexpr explicit extent_type(size_t) noexcept = default;
+    static constexpr size_t value_ = E;
+  };
+
+  template <>
+  struct extent_type<dynamic_extent> {
+    constexpr explicit extent_type(size_t value) noexcept : value_(value) {};
+    size_t value_;
+  };
+
+ public:
+  // Constructors.
+  template <
+      size_t _Extent = Extent,
+      typename std::enable_if<_Extent != dynamic_extent, bool>::type = true>
+  constexpr explicit span(T* ptr) noexcept : ptr_(ptr), size_(_Extent) {}
+  template <
+      size_t _Extent = Extent,
+      typename std::enable_if<_Extent == dynamic_extent, bool>::type = true>
+  constexpr span(T* ptr, size_t size) noexcept : ptr_(ptr), size_(size) {}
+  template <
+      size_t _Extent = Extent,
+      typename std::enable_if<_Extent != dynamic_extent, bool>::type = true>
+  constexpr span(T (&arr)[_Extent]) noexcept : ptr_(arr), size_(_Extent) {}
+  constexpr span(std::vector<T> vec) noexcept
+      : ptr_(vec.data()), size_(vec.size()) {}
+  constexpr span(const span&) noexcept = default;
+  constexpr span& operator=(const span&) noexcept = default;
+  constexpr span(span&&) = default;
+  constexpr span& operator=(span&&) = default;
+
+  // Accessors.
+  constexpr T* data() const noexcept { return ptr_; }
+  constexpr size_t size() const noexcept { return size_.value_; }
+  constexpr T& operator[](size_t i) const {
+    KFFTPP_ASSERT(i < size_.value_, "Index out of bounds");
+    return ptr_[i];
+  }
+
+  // Create a subspan of this span.
+  template <size_t _Offset, size_t _Count = dynamic_extent>
+  constexpr auto subspan() const noexcept
+      -> span<T, _Count != dynamic_extent ? _Count : Extent - _Offset> {
+    static_assert(_Offset <= Extent,
+                  "span<T, N>::subspan<Offset, Count>(): Offset out of range");
+    static_assert(
+        _Count == dynamic_extent || _Count <= Extent - _Offset,
+        "span<T, N>::subspan<Offset, Count>(): Offset + Count out of range");
+
+    using _ReturnType =
+        span<T, _Count != dynamic_extent ? _Count : Extent - _Offset>;
+    return _ReturnType{data() + _Offset,
+                       _Count == dynamic_extent ? size() - _Offset : _Count};
+  }
+  constexpr span subspan(size_t offset, size_t count = dynamic_extent) const {
+    KFFTPP_ASSERT(offset <= size_.value_, "Offset out of bounds");
+    KFFTPP_ASSERT(count == dynamic_extent || offset + count <= size_.value_,
+                  "Count out of bounds");
+    return span(ptr_ + offset,
+                count == dynamic_extent ? size_.value_ - offset : count);
+  }
+
+ private:
+  T* ptr_;
+  extent_type<Extent> size_;
+};
+
+// Deduction Guides
 
 namespace internal {
 
@@ -187,39 +265,6 @@ constexpr complex<T> operator/(const complex<T>& lhs, const T& rhs) {
   return complex<T>(lhs) /= rhs;
 }
 
-// Lightweight span implementation.
-template <typename T>
-class span {
- public:
-  // Placeholder for getting all elements during subspan.
-  static constexpr size_t ALL = SIZE_MAX;
-
-  // Constructors.
-  constexpr span(T* ptr, size_t size) noexcept : ptr_(ptr), size_(size) {}
-  constexpr span(const span&) = default;
-  constexpr span(span&&) = default;
-
-  // Accessors.
-  constexpr T* data() const noexcept { return ptr_; }
-  constexpr size_t size() const noexcept { return size_; }
-  constexpr T& operator[](size_t i) const {
-    KFFTPP_ASSERT(i < size_, "Index out of bounds");
-    return ptr_[i];
-  }
-
-  // Create a subspan of this span.
-  constexpr span subspan(size_t offset, size_t count = ALL) const {
-    KFFTPP_ASSERT(offset <= size_, "Offset out of bounds");
-    KFFTPP_ASSERT(count == ALL || offset + count <= size_,
-                  "Count out of bounds");
-    return span(ptr_ + offset, count == ALL ? size_ - offset : count);
-  }
-
- private:
-  T* ptr_;
-  size_t size_;
-};
-
 // Compute twiddle factors for FFT of length N.
 template <typename T>
 static constexpr std::vector<internal::complex<T>> ComputeTwiddles(
@@ -293,7 +338,7 @@ static constexpr size_t RequiredScratchLength(
 
 template <typename T>
 static constexpr void Butterfly2(
-    internal::span<T> x, const size_t stride,
+    span<T> x, const size_t stride,
     const std::vector<internal::complex<float>>& twiddles, const size_t m) {
   for (size_t i = 0; i < m; ++i) {
     const auto xi = x[m + i] * twiddles[i * stride];
@@ -304,7 +349,7 @@ static constexpr void Butterfly2(
 
 template <typename T>
 static constexpr void Butterfly3(
-    internal::span<T> x, const size_t stride,
+    span<T> x, const size_t stride,
     const std::vector<internal::complex<float>>& twiddles, const size_t m) {
   const size_t m2 = 2 * m;
   for (size_t i = 0; i < m; ++i) {
@@ -327,7 +372,7 @@ static constexpr void Butterfly3(
 
 template <typename T>
 static constexpr void Butterfly4(
-    internal::span<T> x, const size_t stride,
+    span<T> x, const size_t stride,
     const std::vector<internal::complex<float>>& twiddles, const size_t m) {
   const size_t m2 = 2 * m;
   const size_t m3 = 3 * m;
@@ -351,7 +396,7 @@ static constexpr void Butterfly4(
 
 template <typename T>
 static constexpr void Butterfly5(
-    internal::span<T> x, const size_t stride,
+    span<T> x, const size_t stride,
     const std::vector<internal::complex<float>>& twiddles, const size_t m) {
   const size_t m2 = 2 * m;
   const size_t m3 = 3 * m;
@@ -404,7 +449,7 @@ static constexpr void Butterfly5(
 
 template <typename T>
 static constexpr void ButterflyGeneric(
-    internal::span<T> x, const size_t stride,
+    span<T> x, const size_t stride,
     const std::vector<internal::complex<float>>& twiddles, const size_t m,
     const size_t p, const size_t N,
     std::vector<internal::complex<float>>& scratch) {
@@ -429,9 +474,9 @@ static constexpr void ButterflyGeneric(
 
 template <typename T>
 static constexpr void FftRecursive(
-    const internal::span<const T> x, internal::span<T> y,
-    const size_t inputStride, const size_t factorStride,
-    const size_t recursionIndex, const internal::span<size_t> factors,
+    const span<T> x, span<T> y, const size_t inputStride,
+    const size_t factorStride, const size_t recursionIndex,
+    const span<size_t> factors,
     const std::vector<internal::complex<float>>& twiddles, const size_t N,
     std::vector<internal::complex<float>>& scratch) {
   const auto p = factors[2 * recursionIndex];  // FFT radix for this stage.
@@ -491,15 +536,10 @@ class FFT {
   void fft(const std::vector<std::complex<float>>& x,
            std::vector<std::complex<float>>& y) noexcept {
     // Convert to internal complex type.
-    auto& x_ =
-        reinterpret_cast<const std::vector<kfft::internal::complex<float>>&>(x);
-    auto& y_ =
-        reinterpret_cast<std::vector<kfft::internal::complex<float>>&>(y);
-    internal::FftRecursive<internal::complex<float>>(
-        internal::span<const internal::complex<float>>(x_.data(), N_),
-        internal::span<internal::complex<float>>(y_.data(), N_), 1, 1, 0,
-        internal::span<size_t>(factors_.data(), factors_.size()), twiddles_, N_,
-        scratch_);
+    auto& x_ = reinterpret_cast<const span<kfft::internal::complex<float>>&>(x);
+    auto& y_ = reinterpret_cast<span<kfft::internal::complex<float>>&>(y);
+    internal::FftRecursive<internal::complex<float>>(x_, y_, 1, 1, 0, factors_,
+                                                     twiddles_, N_, scratch_);
   }
 
  private:
