@@ -89,10 +89,42 @@ TEST(KissFftppInternal, Complex) {
 
 // Tests for kfft::span
 TEST(KissFftppInternal, Span) {
-  std::vector<float> v = {1, 2, 3, 4, 5};
-  kfft::span<float> s(v.data(), v.size());
+  // Constructors.
+  constexpr static float data0[] = {5, 6, 7, 8, 9};
+  static std::vector<float> data2({10, 11, 12, 13, 14});
+  constexpr kfft::span<const float, 5> s0(&data0[0]);  // Pointer only.
+  constexpr kfft::span<const float> s1(data0, 5);      // Pointer and size.
+  constexpr kfft::span<const float> s2(data0);         // Array.
+  kfft::span<float> s3(data2);                         // std::vector.
+  constexpr auto s4(s0);                               // Copy.
+  constexpr auto s5 = s0;                              // Copy-assign.
+
+  EXPECT_EQ(s0.size(), 5);
+  EXPECT_EQ(s0.data(), &data0[0]);
+  EXPECT_EQ(s0[0], 5);
+
+  EXPECT_EQ(s1.size(), 5);
+  EXPECT_EQ(s1.data(), &data0[0]);
+  EXPECT_EQ(s1[0], 5);
+
+  EXPECT_EQ(s2.size(), 5);
+  EXPECT_EQ(s2.data(), &data0[0]);
+  EXPECT_EQ(s2[0], 5);
+
+  EXPECT_EQ(s3.size(), 5);
+  EXPECT_EQ(s3.data(), data2.data());
+  EXPECT_EQ(s3[0], 10);
+
+  EXPECT_EQ(s4.size(), s0.size());
+  EXPECT_EQ(s4.data(), s0.data());
+
+  EXPECT_EQ(s5.size(), s0.size());
+  EXPECT_EQ(s5.data(), s0.data());
 
   // Accessors.
+  std::vector<float> v({1, 2, 3, 4, 5});
+  kfft::span<float> s(v);
+  kfft::span<float, 5> sFixed(v.data());
   EXPECT_EQ(s.size(), v.size());
   EXPECT_EQ(s.data(), v.data());
   EXPECT_EQ(s[0], 1);
@@ -106,14 +138,14 @@ TEST(KissFftppInternal, Span) {
   EXPECT_EQ(s[0], 6);
 
   // Subspan.
-  auto s2 = s.subspan(1, 3);
-  EXPECT_EQ(s2.size(), 3);
-  EXPECT_EQ(s2[0], 2);
-  EXPECT_EQ(s2[1], 3);
-  EXPECT_EQ(s2[2], 4);
+  auto sSub = s.subspan(1, 3);
+  EXPECT_EQ(sSub.size(), 3);
+  EXPECT_EQ(sSub[0], 2);
+  EXPECT_EQ(sSub[1], 3);
+  EXPECT_EQ(sSub[2], 4);
 
-// Bounds checking.
-#if !defined(KFFTPP_NO_CONTRACT_CHECKING) && !defined(KFFTPP_NO_EXCEPTIONS)
+  // Bounds checking.
+#if !KFFTPP_NO_CONTRACT_CHECKING && !KFFTPP_NO_EXCEPTIONS
   EXPECT_THROW(s[5], std::logic_error);
   EXPECT_THROW(s.subspan(1, 5), std::logic_error);
   EXPECT_THROW(s.subspan(5, 1), std::logic_error);

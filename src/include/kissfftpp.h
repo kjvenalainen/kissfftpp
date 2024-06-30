@@ -73,12 +73,15 @@ constexpr size_t dynamic_extent = std::numeric_limits<std::size_t>::max();
 // Lightweight span implementation.
 template <typename T, size_t Extent = dynamic_extent>
 class span {
+  // Extent type to handle static extent, where the size is part of the type
+  // itself.
   template <size_t E>
   struct extent_type {
-    constexpr explicit extent_type(size_t) noexcept = default;
+    constexpr explicit extent_type(size_t) noexcept {};
     static constexpr size_t value_ = E;
   };
 
+  // Specialization for dynamic_extent.
   template <>
   struct extent_type<dynamic_extent> {
     constexpr explicit extent_type(size_t value) noexcept : value_(value) {};
@@ -86,6 +89,8 @@ class span {
   };
 
  public:
+  static constexpr std::size_t extent = Extent;
+
   // Constructors.
   template <
       size_t _Extent = Extent,
@@ -99,7 +104,10 @@ class span {
       size_t _Extent = Extent,
       typename std::enable_if<_Extent != dynamic_extent, bool>::type = true>
   constexpr span(T (&arr)[_Extent]) noexcept : ptr_(arr), size_(_Extent) {}
-  constexpr span(std::vector<T> vec) noexcept
+  template <
+      size_t _Extent = Extent,
+      typename std::enable_if<_Extent == dynamic_extent, bool>::type = true>
+  constexpr span(std::vector<T>& vec) noexcept
       : ptr_(vec.data()), size_(vec.size()) {}
   constexpr span(const span&) noexcept = default;
   constexpr span& operator=(const span&) noexcept = default;
@@ -115,25 +123,11 @@ class span {
   }
 
   // Create a subspan of this span.
-  template <size_t _Offset, size_t _Count = dynamic_extent>
-  constexpr auto subspan() const noexcept
-      -> span<T, _Count != dynamic_extent ? _Count : Extent - _Offset> {
-    static_assert(_Offset <= Extent,
-                  "span<T, N>::subspan<Offset, Count>(): Offset out of range");
-    static_assert(
-        _Count == dynamic_extent || _Count <= Extent - _Offset,
-        "span<T, N>::subspan<Offset, Count>(): Offset + Count out of range");
-
-    using _ReturnType =
-        span<T, _Count != dynamic_extent ? _Count : Extent - _Offset>;
-    return _ReturnType{data() + _Offset,
-                       _Count == dynamic_extent ? size() - _Offset : _Count};
-  }
   constexpr span subspan(size_t offset, size_t count = dynamic_extent) const {
     KFFTPP_ASSERT(offset <= size_.value_, "Offset out of bounds");
     KFFTPP_ASSERT(count == dynamic_extent || offset + count <= size_.value_,
                   "Count out of bounds");
-    return span(ptr_ + offset,
+    return span(data() + offset,
                 count == dynamic_extent ? size_.value_ - offset : count);
   }
 
