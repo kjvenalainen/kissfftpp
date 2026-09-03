@@ -6,9 +6,12 @@
 #ifndef KISS_FFT_PP_H
 #define KISS_FFT_PP_H
 
+#include <array>
+#include <cmath>
 #include <complex>
 #include <cstddef>
 #include <cstdint>
+#include <exception>
 #include <limits>
 #include <type_traits>
 #include <vector>
@@ -609,6 +612,143 @@ class FFT {
   std::vector<size_t> factors_;
   std::vector<internal::complex<float>> twiddlesForward_;
   std::vector<internal::complex<float>> twiddlesInverse_;
+  std::vector<internal::complex<float>> scratch_;
+};
+
+// Real-to-complex FFT using the same packed, half-length complex transform as
+// kiss_fftr. The forward transform produces N / 2 + 1 bins: DC through the
+// Nyquist frequency. The inverse accepts that same non-redundant spectrum.
+class RealFFT {
+ public:
+  explicit RealFFT(size_t N)
+      : N_(N),
+        ncfft_(ValidateLength(N)),
+        factors_(internal::Factorize(ncfft_)),
+        twiddlesForward_(internal::ComputeTwiddles<float>(ncfft_, false)),
+        twiddlesInverse_(internal::ComputeTwiddles<float>(ncfft_, true)),
+        superTwiddlesForward_(ComputeSuperTwiddles(false)),
+        superTwiddlesInverse_(ComputeSuperTwiddles(true)),
+        packedInput_(ncfft_),
+        packedOutput_(ncfft_),
+        scratch_(internal::RequiredScratchLength(factors_)) {}
+
+  RealFFT(const RealFFT&) = default;
+  RealFFT& operator=(const RealFFT&) = default;
+  RealFFT(RealFFT&&) = default;
+  RealFFT& operator=(RealFFT&&) = default;
+
+  // Forward real-to-complex FFT. `x` must contain N samples and `y` must
+  // contain N / 2 + 1 frequency bins.
+  template <typename Scaling = InverseOneByNScaling>
+  void fft(const std::vector<float>& x, std::vector<std::complex<float>>& y) {
+    KFFTPP_ASSERT(x.size() == N_, "Input size must equal the FFT length");
+    KFFTPP_ASSERT(y.size() == ncfft_ + 1, "Output size must equal N / 2 + 1");
+
+    // Pack even samples in the real component and odd samples in the
+    // imaginary component, then transform the packed signal once.
+    for (size_t i = 0; i < ncfft_; ++i) {
+      packedInput_[i] = {x[2 * i], x[2 * i + 1]};
+    }
+    internal::FftRecursive<internal::complex<float>, false, NoScaling>(
+        span<internal::complex<float>>(packedInput_),
+        span<internal::complex<float>>(packedOutput_), 1, 1, 0, factors_,
+        twiddlesForward_, ncfft_, scratch_);
+
+    const auto dc = packedOutput_[0];
+    StoreScaled<Scaling, false>(y[0], {dc.real() + dc.imag(), 0.0f}, N_);
+    StoreScaled<Scaling, false>(y[ncfft_], {dc.real() - dc.imag(), 0.0f}, N_);
+
+    // This is the recombination step from kiss_fftr. At the midpoint both
+    // assignments address the same bin; retain the C implementation's order.
+    for (size_t k = 1; k <= ncfft_ / 2; ++k) {
+      const auto fpk = packedOutput_[k];
+      const auto fpnk = internal::complex<float>(
+          packedOutput_[ncfft_ - k].real(), -packedOutput_[ncfft_ - k].imag());
+      const auto f1k = fpk + fpnk;
+      const auto f2k = fpk - fpnk;
+      const auto tw = f2k * superTwiddlesForward_[k - 1];
+
+      StoreScaled<Scaling, false>(y[k], (f1k + tw) * 0.5f, N_);
+      StoreScaled<Scaling, false>(
+          y[ncfft_ - k],
+          {0.5f * (f1k.real() - tw.real()), 0.5f * (tw.imag() - f1k.imag())},
+          N_);
+    }
+  }
+
+  // Inverse complex-to-real FFT. With the default scaling, ifft(fft(x)) == x.
+  template <typename Scaling = InverseOneByNScaling>
+  void ifft(const std::vector<std::complex<float>>& x, std::vector<float>& y) {
+    KFFTPP_ASSERT(x.size() == ncfft_ + 1, "Input size must equal N / 2 + 1");
+    KFFTPP_ASSERT(y.size() == N_, "Output size must equal the FFT length");
+
+    packedInput_[0] = {x[0].real() + x[ncfft_].real(),
+                       x[0].real() - x[ncfft_].real()};
+
+    // This is the inverse recombination step from kiss_fftri. The DC and
+    // Nyquist imaginary components are intentionally ignored, as in KissFFT.
+    for (size_t k = 1; k <= ncfft_ / 2; ++k) {
+      const internal::complex<float> fk(x[k].real(), x[k].imag());
+      const internal::complex<float> fnkc(x[ncfft_ - k].real(),
+                                          -x[ncfft_ - k].imag());
+      const auto fek = fk + fnkc;
+      const auto fok = (fk - fnkc) * superTwiddlesInverse_[k - 1];
+      packedInput_[k] = fek + fok;
+      packedInput_[ncfft_ - k] = fek - fok;
+      packedInput_[ncfft_ - k].imag(-packedInput_[ncfft_ - k].imag());
+    }
+
+    internal::FftRecursive<internal::complex<float>, true, NoScaling>(
+        span<internal::complex<float>>(packedInput_),
+        span<internal::complex<float>>(packedOutput_), 1, 1, 0, factors_,
+        twiddlesInverse_, ncfft_, scratch_);
+
+    for (size_t i = 0; i < ncfft_; ++i) {
+      y[2 * i] =
+          Scaling::template Scale<float, true>(packedOutput_[i].real(), N_);
+      y[2 * i + 1] =
+          Scaling::template Scale<float, true>(packedOutput_[i].imag(), N_);
+    }
+  }
+
+ private:
+  static size_t ValidateLength(size_t N) {
+    KFFTPP_ASSERT(N >= 2 && N % 2 == 0,
+                  "Real FFT length must be a non-zero even number");
+    return N / 2;
+  }
+
+  std::vector<internal::complex<float>> ComputeSuperTwiddles(
+      bool inverse) const {
+    auto twiddles = std::vector<internal::complex<float>>(ncfft_ / 2);
+    const float direction = inverse ? 1.0f : -1.0f;
+    for (size_t i = 0; i < twiddles.size(); ++i) {
+      const double phase =
+          direction * KFFTPP_PI * (static_cast<double>(i + 1) / ncfft_ + 0.5);
+      twiddles[i] = {static_cast<float>(std::cos(phase)),
+                     static_cast<float>(std::sin(phase))};
+    }
+    return twiddles;
+  }
+
+  template <typename Scaling, bool Inverse>
+  static void StoreScaled(std::complex<float>& destination,
+                          const internal::complex<float>& value,
+                          const float N) {
+    const auto scaled =
+        Scaling::template Scale<internal::complex<float>, Inverse>(value, N);
+    destination = {scaled.real(), scaled.imag()};
+  }
+
+  size_t N_;
+  size_t ncfft_;
+  std::vector<size_t> factors_;
+  std::vector<internal::complex<float>> twiddlesForward_;
+  std::vector<internal::complex<float>> twiddlesInverse_;
+  std::vector<internal::complex<float>> superTwiddlesForward_;
+  std::vector<internal::complex<float>> superTwiddlesInverse_;
+  std::vector<internal::complex<float>> packedInput_;
+  std::vector<internal::complex<float>> packedOutput_;
   std::vector<internal::complex<float>> scratch_;
 };
 

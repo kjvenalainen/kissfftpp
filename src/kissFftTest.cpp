@@ -6,11 +6,12 @@
 #include <array>
 #include <cmath>
 
+#include "gtest/gtest.h"
 #include "kissfft/kiss_fft.h"
+#include "kissfft/kiss_fftr.h"
 #include "src/include/kissfftpp.h"
 #include "testDataKissfft.h"
 #include "testUtils.h"
-#include "gtest/gtest.h"
 
 using namespace kfftTestData;
 
@@ -207,6 +208,53 @@ TEST(KissFftpp, CorrectnessComplexFloat) {
                            0.1)
           << "index: " << index << " i: " << i;
     }
+  }
+}
+
+TEST(KissFftpp, CorrectnessRealFloat) {
+  for (const size_t length : TEST_FFT_SIZES) {
+    if (length % 2 != 0) {
+      continue;
+    }
+
+    std::vector<float> input(TEST_DATA_INPUT.begin(),
+                             TEST_DATA_INPUT.begin() + length);
+    std::vector<kiss_fft_cpx> expectedSpectrum(length / 2 + 1);
+    std::vector<std::complex<float>> actualSpectrum(length / 2 + 1);
+    std::vector<float> expectedTimeData(length);
+    std::vector<float> actualUnscaledTimeData(length);
+    std::vector<float> actualTimeData(length);
+
+    auto forward =
+        kiss_fftr_alloc(static_cast<int>(length), 0, nullptr, nullptr);
+    auto inverse =
+        kiss_fftr_alloc(static_cast<int>(length), 1, nullptr, nullptr);
+    ASSERT_NE(forward, nullptr);
+    ASSERT_NE(inverse, nullptr);
+
+    kiss_fftr(forward, input.data(), expectedSpectrum.data());
+
+    kfft::RealFFT kfftpp(length);
+    kfftpp.fft(input, actualSpectrum);
+    for (size_t i = 0; i < actualSpectrum.size(); ++i) {
+      EXPECT_NEAR_RELATIVE(actualSpectrum[i].real(), expectedSpectrum[i].r, 0.1)
+          << "length: " << length << " bin: " << i;
+      EXPECT_NEAR_RELATIVE(actualSpectrum[i].imag(), expectedSpectrum[i].i, 0.1)
+          << "length: " << length << " bin: " << i;
+    }
+
+    kiss_fftri(inverse, expectedSpectrum.data(), expectedTimeData.data());
+    kfftpp.ifft<kfft::NoScaling>(actualSpectrum, actualUnscaledTimeData);
+    kfftpp.ifft(actualSpectrum, actualTimeData);
+    for (size_t i = 0; i < length; ++i) {
+      EXPECT_NEAR_RELATIVE(actualUnscaledTimeData[i], expectedTimeData[i], 0.1)
+          << "length: " << length << " sample: " << i;
+      EXPECT_NEAR_RELATIVE(actualTimeData[i], expectedTimeData[i] / length, 0.1)
+          << "length: " << length << " sample: " << i;
+    }
+
+    kiss_fftr_free(forward);
+    kiss_fftr_free(inverse);
   }
 }
 

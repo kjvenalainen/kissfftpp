@@ -58,12 +58,21 @@
       }
     },
     {
-      "label": "Bazel Run Refresh Compile Commands",
+      "label": "Bazel Test (Verbose)",
       "type": "shell",
-      "command": "bazel run @hedron_compile_commands//:refresh_all",
+      "command": "bazel test //src:gtest --test_output=all",
       "group": {
-        "kind": "build",
+        "kind": "test",
         "isDefault": true
+      }
+    },
+    {
+      "label": "Bazel Benchmark FFT Sizes",
+      "type": "shell",
+      "command": "bazel run //src:fftBenchmark -c opt",
+      "group": {
+        "kind": "test",
+        "isDefault": false
       }
     }
   ]

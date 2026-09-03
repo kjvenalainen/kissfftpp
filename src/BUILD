@@ -1,14 +1,6 @@
-load("@hedron_compile_commands//:refresh_compile_commands.bzl", "refresh_compile_commands")
-load("@rules_cc//cc:defs.bzl", "cc_binary", "cc_test")
+load("@rules_cc//cc:defs.bzl", "cc_binary", "cc_library", "cc_test")
 
 package(default_visibility = ["//visibility:public"])
-
-refresh_compile_commands(
-    name = "refresh_compile_commands",
-    targets = [
-        "*",
-    ],
-)
 
 # Compile the original kissfft library.
 cc_library(
@@ -38,6 +30,17 @@ cc_binary(
   ],
   srcs = [
     "main.cpp",
+  ],
+)
+
+cc_binary(
+  name = "fftBenchmark",
+  deps = [
+    ":kissfftpp",
+    ":kissfft",
+  ],
+  srcs = [
+    "fftBenchmark.cpp",
   ],
 )
 
