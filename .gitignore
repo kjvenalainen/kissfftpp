@@ -31,4 +31,17 @@
 *.out
 *.app
 
-compile_commands.json
+# Project build products
+/build/
+/install/
+/bazel-*/
+/CMakeFiles/
+/CMakeCache.txt
+/cmake_install.cmake
+/Makefile
+/compile_commands.json
+
+# Editors and operating systems
+.DS_Store
+.idea/
+.vscode/

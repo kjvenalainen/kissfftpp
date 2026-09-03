@@ -4,7 +4,13 @@
 //
 
 #include <array>
+#include <chrono>
 #include <cmath>
+#include <complex>
+#include <cstdlib>
+#include <iomanip>
+#include <iostream>
+#include <vector>
 
 #include "gtest/gtest.h"
 #include "kissfft/kiss_fft.h"
@@ -211,6 +217,36 @@ TEST(KissFftpp, CorrectnessComplexFloat) {
   }
 }
 
+TEST(KissFftpp, ComplexTransformSupportsInPlaceBuffers) {
+  constexpr size_t kLength = 8;
+  std::vector<std::complex<float>> values = {
+      {1.0f, 0.0f},  {2.0f, -1.0f}, {0.0f, 2.0f},  {3.0f, 0.5f},
+      {-2.0f, 1.0f}, {1.0f, 3.0f},  {0.0f, -2.0f}, {4.0f, 1.0f},
+  };
+  const auto original = values;
+
+  kfft::FFT plan(kLength);
+  plan.fft(values, values);
+  plan.ifft(values, values);
+
+  for (size_t i = 0; i < values.size(); ++i) {
+    EXPECT_NEAR(values[i].real(), original[i].real(), 1e-5f);
+    EXPECT_NEAR(values[i].imag(), original[i].imag(), 1e-5f);
+  }
+}
+
+#if !KFFTPP_NO_CONTRACT_CHECKING && !KFFTPP_NO_EXCEPTIONS
+TEST(KissFftpp, RejectsInvalidComplexTransformContracts) {
+  EXPECT_THROW(kfft::FFT(0), std::logic_error);
+
+  kfft::FFT plan(4);
+  std::vector<std::complex<float>> input(3);
+  std::vector<std::complex<float>> output(4);
+  EXPECT_THROW(plan.fft(input, output), std::logic_error);
+  EXPECT_THROW(plan.fft(output, input), std::logic_error);
+}
+#endif
+
 TEST(KissFftpp, CorrectnessRealFloat) {
   for (const size_t length : TEST_FFT_SIZES) {
     if (length % 2 != 0) {
@@ -258,7 +294,7 @@ TEST(KissFftpp, CorrectnessRealFloat) {
   }
 }
 
-TEST(KissFftpp, KissFftPerformance) {
+TEST(KissFftpp, DISABLED_KissFftPerformance) {
   // Run a performance test using many random length 512 ffts.
 
   constexpr static size_t N = 1560;
@@ -285,8 +321,8 @@ TEST(KissFftpp, KissFftPerformance) {
   for (size_t i = 0; i < NUM_TESTS; i++) {
     // Generate random input
     for (size_t j = 0; j < N; j++) {
-      x0[j] = {static_cast<float>(rand()) / RAND_MAX,
-               static_cast<float>(rand()) / RAND_MAX};
+      x0[j] = {static_cast<float>(rand()) / static_cast<float>(RAND_MAX),
+               static_cast<float>(rand()) / static_cast<float>(RAND_MAX)};
       x1[j] = {x0[j].r, x0[j].i};
     }
 

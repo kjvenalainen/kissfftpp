@@ -6,6 +6,7 @@
 #ifndef KISS_FFT_PP_H
 #define KISS_FFT_PP_H
 
+#include <algorithm>
 #include <array>
 #include <cmath>
 #include <complex>
@@ -50,14 +51,18 @@
 #define KFFTPP_ASSERT(cond, msg) ((void)0)
 #elif KFFTPP_NO_EXCEPTIONS
 #define KFFTPP_ASSERT(cond, msg) \
-  if (!(cond)) {                 \
-    std::terminate();            \
-  }
+  do {                           \
+    if (!(cond)) {               \
+      std::terminate();          \
+    }                            \
+  } while (false)
 #else
-#define KFFTPP_ASSERT(cond, msg) \
-  if (!(cond)) {                 \
-    throw std::logic_error(msg); \
-  }
+#define KFFTPP_ASSERT(cond, msg)   \
+  do {                             \
+    if (!(cond)) {                 \
+      throw std::logic_error(msg); \
+    }                              \
+  } while (false)
 #endif
 
 #ifndef KFFTPP_HALF_PI
@@ -294,9 +299,11 @@ template <typename T>
 static constexpr std::vector<internal::complex<T>> ComputeTwiddles(
     size_t N, bool inverse) {
   auto twiddles = std::vector<internal::complex<T>>(N);
-  const double phase = inverse ? 2 * KFFTPP_PI / N : -2 * KFFTPP_PI / N;
+  const double length = static_cast<double>(N);
+  const double phase = inverse ? 2.0 * static_cast<double>(KFFTPP_PI) / length
+                               : -2.0 * static_cast<double>(KFFTPP_PI) / length;
   for (size_t i = 0; i < N; ++i) {
-    const double phaseArg = phase * i;
+    const double phaseArg = phase * static_cast<double>(i);
     twiddles[i] = {static_cast<T>(std::cos(phaseArg)),
                    static_cast<T>(std::sin(phaseArg))};
   }
@@ -589,17 +596,25 @@ static constexpr void FftRecursive(
     // spend complex multiplies loading and multiplying by that identity.
     const size_t stride = inputStride * factorStride;
     if (p == 2) {
-      const auto x0 = Scaling::template Scale<T, Inverse>(x[0], N);
-      const auto x1 = Scaling::template Scale<T, Inverse>(x[stride], N);
+      const float transformLength = static_cast<float>(N);
+      const auto x0 =
+          Scaling::template Scale<T, Inverse>(x[0], transformLength);
+      const auto x1 =
+          Scaling::template Scale<T, Inverse>(x[stride], transformLength);
       y[0] = x0 + x1;
       y[1] = x0 - x1;
       return;
     }
     if (p == 4) {
-      const auto x0 = Scaling::template Scale<T, Inverse>(x[0], N);
-      const auto x1 = Scaling::template Scale<T, Inverse>(x[stride], N);
-      const auto x2 = Scaling::template Scale<T, Inverse>(x[2 * stride], N);
-      const auto x3 = Scaling::template Scale<T, Inverse>(x[3 * stride], N);
+      const float transformLength = static_cast<float>(N);
+      const auto x0 =
+          Scaling::template Scale<T, Inverse>(x[0], transformLength);
+      const auto x1 =
+          Scaling::template Scale<T, Inverse>(x[stride], transformLength);
+      const auto x2 =
+          Scaling::template Scale<T, Inverse>(x[2 * stride], transformLength);
+      const auto x3 =
+          Scaling::template Scale<T, Inverse>(x[3 * stride], transformLength);
       const auto x0PlusX2 = x0 + x2;
       const auto x0MinusX2 = x0 - x2;
       const auto x1PlusX3 = x1 + x3;
@@ -622,7 +637,8 @@ static constexpr void FftRecursive(
 
     // Copy strided input to output, scaling as needed.
     for (size_t i = 0; i < p; ++i) {
-      y[i] = Scaling::template Scale<T, Inverse>(x[i * stride], N);
+      y[i] = Scaling::template Scale<T, Inverse>(x[i * stride],
+                                                 static_cast<float>(N));
     }
   } else {
     for (size_t i = 0; i < p; ++i) {
@@ -661,11 +677,13 @@ static constexpr void FftRecursive(
 // Main FFT class.
 class FFT {
  public:
-  FFT(size_t N) noexcept
-      : N_(N),
+  explicit FFT(size_t N)
+      : N_(ValidateLength(N)),
         factors_(internal::Factorize(N_)),
         twiddlesForward_(internal::ComputeTwiddles<float>(N_, false)),
         twiddlesInverse_(internal::ComputeTwiddles<float>(N_, true)),
+        input_(N_),
+        output_(N_),
         scratch_(internal::RequiredScratchLength(factors_)) {}
   FFT(const FFT&) = default;
   FFT& operator=(const FFT&) = default;
@@ -675,30 +693,61 @@ class FFT {
   // Forward complex-to-complex FFT.
   template <typename Scaling = InverseOneByNScaling>
   void fft(const std::vector<std::complex<float>>& x,
-           std::vector<std::complex<float>>& y) noexcept {
-    // Convert to internal complex type.
-    auto& x_ = reinterpret_cast<const span<kfft::internal::complex<float>>&>(x);
-    auto& y_ = reinterpret_cast<span<kfft::internal::complex<float>>&>(y);
+           std::vector<std::complex<float>>& y) {
+    KFFTPP_ASSERT(x.size() == N_, "Input size must equal the FFT length");
+    KFFTPP_ASSERT(y.size() == N_, "Output size must equal the FFT length");
+
+    CopyToInternal(x, input_);
     internal::FftRecursive<internal::complex<float>, false, Scaling>(
-        x_, y_, 1, 1, 0, factors_, twiddlesForward_, N_, scratch_);
+        span<internal::complex<float>>(input_),
+        span<internal::complex<float>>(output_), 1, 1, 0, factors_,
+        twiddlesForward_, N_, scratch_);
+    CopyToStdComplex(output_, y);
   }
 
   // Inverse complex-to-complex FFT.
   template <typename Scaling = InverseOneByNScaling>
   void ifft(const std::vector<std::complex<float>>& x,
-            std::vector<std::complex<float>>& y) noexcept {
-    // Convert to internal complex type.
-    auto& x_ = reinterpret_cast<const span<kfft::internal::complex<float>>&>(x);
-    auto& y_ = reinterpret_cast<span<kfft::internal::complex<float>>&>(y);
+            std::vector<std::complex<float>>& y) {
+    KFFTPP_ASSERT(x.size() == N_, "Input size must equal the FFT length");
+    KFFTPP_ASSERT(y.size() == N_, "Output size must equal the FFT length");
+
+    CopyToInternal(x, input_);
     internal::FftRecursive<internal::complex<float>, true, Scaling>(
-        x_, y_, 1, 1, 0, factors_, twiddlesInverse_, N_, scratch_);
+        span<internal::complex<float>>(input_),
+        span<internal::complex<float>>(output_), 1, 1, 0, factors_,
+        twiddlesInverse_, N_, scratch_);
+    CopyToStdComplex(output_, y);
   }
 
  private:
+  static size_t ValidateLength(size_t N) {
+    KFFTPP_ASSERT(N > 0, "FFT length must be greater than zero");
+    return N;
+  }
+
+  static void CopyToInternal(
+      const std::vector<std::complex<float>>& source,
+      std::vector<internal::complex<float>>& destination) {
+    for (size_t i = 0; i < source.size(); ++i) {
+      destination[i] = {source[i].real(), source[i].imag()};
+    }
+  }
+
+  static void CopyToStdComplex(
+      const std::vector<internal::complex<float>>& source,
+      std::vector<std::complex<float>>& destination) {
+    for (size_t i = 0; i < source.size(); ++i) {
+      destination[i] = {source[i].real(), source[i].imag()};
+    }
+  }
+
   size_t N_;
   std::vector<size_t> factors_;
   std::vector<internal::complex<float>> twiddlesForward_;
   std::vector<internal::complex<float>> twiddlesInverse_;
+  std::vector<internal::complex<float>> input_;
+  std::vector<internal::complex<float>> output_;
   std::vector<internal::complex<float>> scratch_;
 };
 
@@ -742,8 +791,11 @@ class RealFFT {
         twiddlesForward_, ncfft_, scratch_);
 
     const auto dc = packedOutput_[0];
-    StoreScaled<Scaling, false>(y[0], {dc.real() + dc.imag(), 0.0f}, N_);
-    StoreScaled<Scaling, false>(y[ncfft_], {dc.real() - dc.imag(), 0.0f}, N_);
+    const float transformLength = static_cast<float>(N_);
+    StoreScaled<Scaling, false>(y[0], {dc.real() + dc.imag(), 0.0f},
+                                transformLength);
+    StoreScaled<Scaling, false>(y[ncfft_], {dc.real() - dc.imag(), 0.0f},
+                                transformLength);
 
     // This is the recombination step from kiss_fftr. At the midpoint both
     // assignments address the same bin; retain the C implementation's order.
@@ -755,11 +807,11 @@ class RealFFT {
       const auto f2k = fpk - fpnk;
       const auto tw = f2k * superTwiddlesForward_[k - 1];
 
-      StoreScaled<Scaling, false>(y[k], (f1k + tw) * 0.5f, N_);
+      StoreScaled<Scaling, false>(y[k], (f1k + tw) * 0.5f, transformLength);
       StoreScaled<Scaling, false>(
           y[ncfft_ - k],
           {0.5f * (f1k.real() - tw.real()), 0.5f * (tw.imag() - f1k.imag())},
-          N_);
+          transformLength);
     }
   }
 
@@ -791,17 +843,17 @@ class RealFFT {
         twiddlesInverse_, ncfft_, scratch_);
 
     for (size_t i = 0; i < ncfft_; ++i) {
-      y[2 * i] =
-          Scaling::template Scale<float, true>(packedOutput_[i].real(), N_);
-      y[2 * i + 1] =
-          Scaling::template Scale<float, true>(packedOutput_[i].imag(), N_);
+      y[2 * i] = Scaling::template Scale<float, true>(packedOutput_[i].real(),
+                                                      static_cast<float>(N_));
+      y[2 * i + 1] = Scaling::template Scale<float, true>(
+          packedOutput_[i].imag(), static_cast<float>(N_));
     }
   }
 
  private:
   static size_t ValidateLength(size_t N) {
     KFFTPP_ASSERT(N >= 2 && N % 2 == 0,
-                  "Real FFT length must be a non-zero even number");
+                  "Real FFT length must be even and at least two");
     return N / 2;
   }
 
@@ -811,7 +863,8 @@ class RealFFT {
     const float direction = inverse ? 1.0f : -1.0f;
     for (size_t i = 0; i < twiddles.size(); ++i) {
       const double phase =
-          direction * KFFTPP_PI * (static_cast<double>(i + 1) / ncfft_ + 0.5);
+          static_cast<double>(direction) * static_cast<double>(KFFTPP_PI) *
+          (static_cast<double>(i + 1) / static_cast<double>(ncfft_) + 0.5);
       twiddles[i] = {static_cast<float>(std::cos(phase)),
                      static_cast<float>(std::sin(phase))};
     }

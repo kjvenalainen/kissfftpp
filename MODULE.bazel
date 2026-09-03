@@ -2,7 +2,7 @@
 
 module(
     name = "kissfftpp",
-    version = "0.0.0",
+    version = "0.1.0",
 )
 # Bazel now uses Bzlmod by default to manage external dependencies.
 # Please consider migrating your external dependencies from WORKSPACE to MODULE.bazel.
