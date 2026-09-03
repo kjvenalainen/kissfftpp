@@ -364,10 +364,16 @@ template <typename T, bool Inverse>
 static constexpr void Butterfly2(
     span<T> x, const size_t stride,
     const std::vector<internal::complex<float>>& twiddles, const size_t m) {
+  T* x0 = x.data();
+  T* x1 = x0 + m;
+  const auto* twiddle = twiddles.data();
   for (size_t i = 0; i < m; ++i) {
-    const auto xi = x[m + i] * twiddles[i * stride];
-    x[m + i] = x[i] - xi;
-    x[i] += xi;
+    const auto xi = *x1 * *twiddle;
+    *x1 = *x0 - xi;
+    *x0 += xi;
+    ++x0;
+    ++x1;
+    twiddle += stride;
   }
 }
 
@@ -375,22 +381,31 @@ template <typename T, bool Inverse>
 static constexpr void Butterfly3(
     span<T> x, const size_t stride,
     const std::vector<internal::complex<float>>& twiddles, const size_t m) {
-  const size_t m2 = 2 * m;
+  T* x0 = x.data();
+  T* x1 = x0 + m;
+  T* x2 = x1 + m;
+  const auto* twiddle1 = twiddles.data();
+  const auto* twiddle2 = twiddle1;
+  const auto epi3 = twiddles[m * stride].imag();
   for (size_t i = 0; i < m; ++i) {
     std::array<T, 5> xi;
-    xi[1] = x[m + i] * twiddles[i * stride];
-    xi[2] = x[m2 + i] * twiddles[i * 2 * stride];
+    xi[1] = *x1 * *twiddle1;
+    xi[2] = *x2 * *twiddle2;
     xi[3] = xi[1] + xi[2];
     xi[0] = xi[1] - xi[2];
-    x[m + i] = {
-        x[i].real() - (xi[3].real() * 0.5f),
-        x[i].imag() - (xi[3].imag() * 0.5f),
+    *x1 = {
+        x0->real() - (xi[3].real() * 0.5f),
+        x0->imag() - (xi[3].imag() * 0.5f),
     };
-    xi[0] *= twiddles[m * stride].imag();
-    x[i] += xi[3];
-    x[m2 + i] = {x[m + i].real() + xi[0].imag(),
-                 x[m + i].imag() - xi[0].real()};
-    x[m + i] = {x[m + i].real() - xi[0].imag(), x[m + i].imag() + xi[0].real()};
+    xi[0] *= epi3;
+    *x0 += xi[3];
+    *x2 = {x1->real() + xi[0].imag(), x1->imag() - xi[0].real()};
+    *x1 = {x1->real() - xi[0].imag(), x1->imag() + xi[0].real()};
+    ++x0;
+    ++x1;
+    ++x2;
+    twiddle1 += stride;
+    twiddle2 += 2 * stride;
   }
 }
 
@@ -399,22 +414,34 @@ template <typename T, bool Inverse,
 static constexpr void Butterfly4(
     span<T> x, const size_t stride,
     const std::vector<internal::complex<float>>& twiddles, const size_t m) {
-  const size_t m2 = 2 * m;
-  const size_t m3 = 3 * m;
+  T* x0 = x.data();
+  T* x1 = x0 + m;
+  T* x2 = x1 + m;
+  T* x3 = x2 + m;
+  const auto* twiddle1 = twiddles.data();
+  const auto* twiddle2 = twiddle1;
+  const auto* twiddle3 = twiddle1;
   for (size_t i = 0; i < m; ++i) {
     std::array<T, 6> xi;
-    xi[0] = x[m + i] * twiddles[i * stride];
-    xi[1] = x[m2 + i] * twiddles[i * 2 * stride];
-    xi[2] = x[m3 + i] * twiddles[i * 3 * stride];
+    xi[0] = *x1 * *twiddle1;
+    xi[1] = *x2 * *twiddle2;
+    xi[2] = *x3 * *twiddle3;
     xi[3] = xi[0] + xi[2];
     xi[4] = xi[0] - xi[2];
-    xi[5] = x[i] - xi[1];
-    x[i] += xi[1];
-    x[m2 + i] = x[i] - xi[3];
-    x[i] += xi[3];
+    xi[5] = *x0 - xi[1];
+    *x0 += xi[1];
+    *x2 = *x0 - xi[3];
+    *x0 += xi[3];
 
-    x[m + i] = {xi[5].real() + xi[4].imag(), xi[5].imag() - xi[4].real()};
-    x[m3 + i] = {xi[5].real() - xi[4].imag(), xi[5].imag() + xi[4].real()};
+    *x1 = {xi[5].real() + xi[4].imag(), xi[5].imag() - xi[4].real()};
+    *x3 = {xi[5].real() - xi[4].imag(), xi[5].imag() + xi[4].real()};
+    ++x0;
+    ++x1;
+    ++x2;
+    ++x3;
+    twiddle1 += stride;
+    twiddle2 += 2 * stride;
+    twiddle3 += 3 * stride;
   }
 }
 
@@ -423,22 +450,34 @@ template <typename T, bool Inverse,
 static constexpr void Butterfly4(
     span<T> x, const size_t stride,
     const std::vector<internal::complex<float>>& twiddles, const size_t m) {
-  const size_t m2 = 2 * m;
-  const size_t m3 = 3 * m;
+  T* x0 = x.data();
+  T* x1 = x0 + m;
+  T* x2 = x1 + m;
+  T* x3 = x2 + m;
+  const auto* twiddle1 = twiddles.data();
+  const auto* twiddle2 = twiddle1;
+  const auto* twiddle3 = twiddle1;
   for (size_t i = 0; i < m; ++i) {
     std::array<T, 6> xi;
-    xi[0] = x[m + i] * twiddles[i * stride];
-    xi[1] = x[m2 + i] * twiddles[i * 2 * stride];
-    xi[2] = x[m3 + i] * twiddles[i * 3 * stride];
+    xi[0] = *x1 * *twiddle1;
+    xi[1] = *x2 * *twiddle2;
+    xi[2] = *x3 * *twiddle3;
     xi[3] = xi[0] + xi[2];
     xi[4] = xi[0] - xi[2];
-    xi[5] = x[i] - xi[1];
-    x[i] += xi[1];
-    x[m2 + i] = x[i] - xi[3];
-    x[i] += xi[3];
+    xi[5] = *x0 - xi[1];
+    *x0 += xi[1];
+    *x2 = *x0 - xi[3];
+    *x0 += xi[3];
 
-    x[m + i] = {xi[5].real() - xi[4].imag(), xi[5].imag() + xi[4].real()};
-    x[m3 + i] = {xi[5].real() + xi[4].imag(), xi[5].imag() - xi[4].real()};
+    *x1 = {xi[5].real() - xi[4].imag(), xi[5].imag() + xi[4].real()};
+    *x3 = {xi[5].real() + xi[4].imag(), xi[5].imag() - xi[4].real()};
+    ++x0;
+    ++x1;
+    ++x2;
+    ++x3;
+    twiddle1 += stride;
+    twiddle2 += 2 * stride;
+    twiddle3 += 3 * stride;
   }
 }
 
@@ -446,52 +485,65 @@ template <typename T, bool Inverse>
 static constexpr void Butterfly5(
     span<T> x, const size_t stride,
     const std::vector<internal::complex<float>>& twiddles, const size_t m) {
-  const size_t m2 = 2 * m;
-  const size_t m3 = 3 * m;
-  const size_t m4 = 4 * m;
+  T* x0 = x.data();
+  T* x1 = x0 + m;
+  T* x2 = x1 + m;
+  T* x3 = x2 + m;
+  T* x4 = x3 + m;
+  const auto* twiddle1 = twiddles.data();
+  const auto* twiddle2 = twiddle1;
+  const auto* twiddle3 = twiddle1;
+  const auto* twiddle4 = twiddle1;
+  const auto ya = twiddles[m * stride];
+  const auto yb = twiddles[m * 2 * stride];
   for (size_t i = 0; i < m; ++i) {
     std::array<T, 13> xi;
-    xi[0] = x[i];
-    xi[1] = x[m + i] * twiddles[i * stride];
-    xi[2] = x[m2 + i] * twiddles[i * 2 * stride];
-    xi[3] = x[m3 + i] * twiddles[i * 3 * stride];
-    xi[4] = x[m4 + i] * twiddles[i * 4 * stride];
+    xi[0] = *x0;
+    xi[1] = *x1 * *twiddle1;
+    xi[2] = *x2 * *twiddle2;
+    xi[3] = *x3 * *twiddle3;
+    xi[4] = *x4 * *twiddle4;
     xi[7] = xi[1] + xi[4];
     xi[10] = xi[1] - xi[4];
     xi[8] = xi[2] + xi[3];
     xi[9] = xi[2] - xi[3];
-    x[i] = {
+    *x0 = {
         xi[0].real() + xi[7].real() + xi[8].real(),
         xi[0].imag() + xi[7].imag() + xi[8].imag(),
     };
     xi[5] = {
-        xi[0].real() + xi[7].real() * twiddles[m * stride].real() +
-            xi[8].real() * twiddles[m * 2 * stride].real(),
-        xi[0].imag() + xi[7].imag() * twiddles[m * stride].real() +
-            xi[8].imag() * twiddles[m * 2 * stride].real(),
+        xi[0].real() + xi[7].real() * ya.real() +
+            xi[8].real() * yb.real(),
+        xi[0].imag() + xi[7].imag() * ya.real() +
+            xi[8].imag() * yb.real(),
     };
     xi[6] = {
-        xi[10].imag() * twiddles[m * stride].imag() +
-            xi[9].imag() * twiddles[m * 2 * stride].imag(),
-        -xi[10].real() * twiddles[m * stride].imag() -
-            xi[9].real() * twiddles[m * 2 * stride].imag(),
+        xi[10].imag() * ya.imag() + xi[9].imag() * yb.imag(),
+        -xi[10].real() * ya.imag() - xi[9].real() * yb.imag(),
     };
-    x[m + i] = xi[5] - xi[6];
-    x[m4 + i] = xi[5] + xi[6];
+    *x1 = xi[5] - xi[6];
+    *x4 = xi[5] + xi[6];
     xi[11] = {
-        xi[0].real() + xi[7].real() * twiddles[m * 2 * stride].real() +
-            xi[8].real() * twiddles[m * stride].real(),
-        xi[0].imag() + xi[7].imag() * twiddles[m * 2 * stride].real() +
-            xi[8].imag() * twiddles[m * stride].real(),
+        xi[0].real() + xi[7].real() * yb.real() +
+            xi[8].real() * ya.real(),
+        xi[0].imag() + xi[7].imag() * yb.real() +
+            xi[8].imag() * ya.real(),
     };
     xi[12] = {
-        xi[9].imag() * twiddles[m * stride].imag() -
-            xi[10].imag() * twiddles[m * 2 * stride].imag(),
-        xi[10].real() * twiddles[m * 2 * stride].imag() -
-            xi[9].real() * twiddles[m * stride].imag(),
+        xi[9].imag() * ya.imag() - xi[10].imag() * yb.imag(),
+        xi[10].real() * yb.imag() - xi[9].real() * ya.imag(),
     };
-    x[m2 + i] = xi[11] + xi[12];
-    x[m3 + i] = xi[11] - xi[12];
+    *x2 = xi[11] + xi[12];
+    *x3 = xi[11] - xi[12];
+    ++x0;
+    ++x1;
+    ++x2;
+    ++x3;
+    ++x4;
+    twiddle1 += stride;
+    twiddle2 += 2 * stride;
+    twiddle3 += 3 * stride;
+    twiddle4 += 4 * stride;
   }
 }
 
@@ -532,10 +584,45 @@ static constexpr void FftRecursive(
       factors[2 * recursionIndex + 1];  // Length of this FFT stage / radix.
 
   if (m == 1) {
+    // The final radix-2 and radix-4 stages always use twiddle factor one.
+    // Evaluate them directly so the common power-of-two transforms do not
+    // spend complex multiplies loading and multiplying by that identity.
+    const size_t stride = inputStride * factorStride;
+    if (p == 2) {
+      const auto x0 = Scaling::template Scale<T, Inverse>(x[0], N);
+      const auto x1 = Scaling::template Scale<T, Inverse>(x[stride], N);
+      y[0] = x0 + x1;
+      y[1] = x0 - x1;
+      return;
+    }
+    if (p == 4) {
+      const auto x0 = Scaling::template Scale<T, Inverse>(x[0], N);
+      const auto x1 = Scaling::template Scale<T, Inverse>(x[stride], N);
+      const auto x2 = Scaling::template Scale<T, Inverse>(x[2 * stride], N);
+      const auto x3 = Scaling::template Scale<T, Inverse>(x[3 * stride], N);
+      const auto x0PlusX2 = x0 + x2;
+      const auto x0MinusX2 = x0 - x2;
+      const auto x1PlusX3 = x1 + x3;
+      const auto x1MinusX3 = x1 - x3;
+      y[0] = x0PlusX2 + x1PlusX3;
+      y[2] = x0PlusX2 - x1PlusX3;
+      if (Inverse) {
+        y[1] = {x0MinusX2.real() - x1MinusX3.imag(),
+                x0MinusX2.imag() + x1MinusX3.real()};
+        y[3] = {x0MinusX2.real() + x1MinusX3.imag(),
+                x0MinusX2.imag() - x1MinusX3.real()};
+      } else {
+        y[1] = {x0MinusX2.real() + x1MinusX3.imag(),
+                x0MinusX2.imag() - x1MinusX3.real()};
+        y[3] = {x0MinusX2.real() - x1MinusX3.imag(),
+                x0MinusX2.imag() + x1MinusX3.real()};
+      }
+      return;
+    }
+
     // Copy strided input to output, scaling as needed.
-    for (size_t i = 0; i < p * m; ++i) {
-      y[i] = Scaling::template Scale<T, Inverse>(
-          x[i * inputStride * factorStride], N);
+    for (size_t i = 0; i < p; ++i) {
+      y[i] = Scaling::template Scale<T, Inverse>(x[i * stride], N);
     }
   } else {
     for (size_t i = 0; i < p; ++i) {

@@ -8,6 +8,7 @@
 #include <cstdlib>
 #include <iomanip>
 #include <iostream>
+#include <sstream>
 #include <string>
 #include <vector>
 
@@ -20,6 +21,9 @@ using Clock = std::chrono::steady_clock;
 
 constexpr int kWarmupIterations = 10;
 constexpr int kMeasuredIterations = 1000;
+constexpr int kSizeColumnWidth = 8;
+constexpr int kTimeColumnWidth = 18;
+constexpr int kSpeedupColumnWidth = 10;
 
 struct Result {
   double milliseconds;
@@ -78,6 +82,38 @@ int ParseIterations(int argc, char** argv) {
   return 0;
 }
 
+std::string FormatValue(double value, int precision, const char* suffix = "") {
+  std::ostringstream stream;
+  stream << std::fixed << std::setprecision(precision) << value << suffix;
+  return stream.str();
+}
+
+void PrintTableDivider() {
+  std::cout << '+' << std::string(kSizeColumnWidth + 2, '-') << '+'
+            << std::string(kTimeColumnWidth + 2, '-') << '+'
+            << std::string(kTimeColumnWidth + 2, '-') << '+'
+            << std::string(kSpeedupColumnWidth + 2, '-') << "+\n";
+}
+
+void PrintTableHeader() {
+  std::cout << "| " << std::left << std::setw(kSizeColumnWidth) << "size"
+            << "| " << std::setw(kTimeColumnWidth) << "kissfft (us/fft)"
+            << "| " << std::setw(kTimeColumnWidth) << "kissfftpp (us/fft)"
+            << "| " << std::setw(kSpeedupColumnWidth) << "speedup"
+            << "|\n";
+}
+
+void PrintTableRow(size_t size, double kissMicroseconds,
+                   double kissppMicroseconds) {
+  std::cout << "| " << std::right << std::setw(kSizeColumnWidth) << size
+            << "| " << std::setw(kTimeColumnWidth)
+            << FormatValue(kissMicroseconds, 3) << "| "
+            << std::setw(kTimeColumnWidth) << FormatValue(kissppMicroseconds, 3)
+            << "| " << std::setw(kSpeedupColumnWidth)
+            << FormatValue(kissMicroseconds / kissppMicroseconds, 2, "x")
+            << "|\n";
+}
+
 }  // namespace
 
 int main(int argc, char** argv) {
@@ -86,14 +122,20 @@ int main(int argc, char** argv) {
     return EXIT_FAILURE;
   }
 
-  // These cover small transforms, common audio block sizes, and larger FFTs.
+  // These cover small transforms, common audio block sizes, mixed-radix
+  // transforms, and larger FFTs. 441 also exercises the generic radix-7
+  // butterfly.
   const std::vector<size_t> sizes = {16,  32,   64,   128,  256,
-                                     512, 1024, 2048, 4096, 8192};
+                                     441, 480,  512,  1000, 1024,
+                                     1536, 2048, 4096, 8192};
   volatile float checksumSink = 0.0f;
+  std::vector<double> kissMicroseconds;
+  std::vector<double> kissppMicroseconds;
+  kissMicroseconds.reserve(sizes.size());
+  kissppMicroseconds.reserve(sizes.size());
 
   std::cout << "FFT benchmark (" << iterations
-            << " measured iterations per implementation)\n"
-            << "size, kissfft us/fft, kissfftpp us/fft, kissfftpp/kissfft\n";
+            << " measured iterations per implementation)\n";
 
   for (size_t sizeIndex = 0; sizeIndex < sizes.size(); ++sizeIndex) {
     const size_t size = sizes[sizeIndex];
@@ -138,17 +180,23 @@ int main(int argc, char** argv) {
     }
 
     checksumSink += kissResult.checksum + kissppResult.checksum;
-    const double kissMicroseconds =
+    const double kissTimeMicroseconds =
         kissResult.milliseconds * 1000.0 / iterations;
-    const double kissppMicroseconds =
+    const double kissppTimeMicroseconds =
         kissppResult.milliseconds * 1000.0 / iterations;
-    std::cout << size << ", " << std::fixed << std::setprecision(3)
-              << kissMicroseconds << ", " << kissppMicroseconds << ", "
-              << std::setprecision(2) << kissppMicroseconds / kissMicroseconds
-              << "\n";
+    kissMicroseconds.push_back(kissTimeMicroseconds);
+    kissppMicroseconds.push_back(kissppTimeMicroseconds);
 
     kiss_fft_free(kissPlan);
   }
+
+  PrintTableDivider();
+  PrintTableHeader();
+  PrintTableDivider();
+  for (size_t i = 0; i < sizes.size(); ++i) {
+    PrintTableRow(sizes[i], kissMicroseconds[i], kissppMicroseconds[i]);
+  }
+  PrintTableDivider();
 
   // Keep the transform results observable without polluting the timed region.
   if (checksumSink == 0.123456f) {
