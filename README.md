@@ -11,34 +11,13 @@ and provides reusable transform plans with a small modern C++ API.
 - Arbitrary positive complex transform lengths and even real transform lengths
 - Reusable plans: transform calls make no heap allocations
 - Configurable inverse scaling and optional contract checks
-- CMake package export and Bazel targets
+- Bazel build and test targets
 
 ## Install and integrate
 
-### CMake
+If you just want an FFT, include `src/include/kissfftpp.h` in your project. This is the singular header for the entire implementation.
 
-Install the headers and CMake package:
-
-```sh
-cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
-cmake --build build --parallel
-cmake --install build --prefix /desired/prefix
-```
-
-Then consume the exported target:
-
-```cmake
-find_package(kissfftpp CONFIG REQUIRED)
-target_link_libraries(my_target PRIVATE kissfftpp::kissfftpp)
-```
-
-For a vendored copy, add this repository with `add_subdirectory()` and link
-against the same target. The public header is
-`src/include/kissfftpp.h`.
-
-### Bazel
-
-The public library target is `//src:kissfftpp`:
+The public Bazel library target is `//src:kissfftpp`:
 
 ```starlark
 cc_binary(
@@ -101,18 +80,11 @@ thread or protect shared access externally.
 
 ## Build, test, and benchmark
 
-The portable CMake smoke test has no external test dependency:
-
-```sh
-cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
-cmake --build build --parallel
-ctest --test-dir build --output-on-failure
-```
-
 The Bazel suite compares results against the bundled KissFFT reference
 implementation:
 
 ```sh
+bazel build //src:main //src:fftBenchmark
 bazel test //src:gtest --test_output=errors
 bazel run //src:fftBenchmark -- --iterations 1000
 ```

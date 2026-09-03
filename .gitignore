@@ -31,15 +31,8 @@
 *.out
 *.app
 
-# Project build products
-/build/
-/install/
+# Bazel build products
 /bazel-*/
-/CMakeFiles/
-/CMakeCache.txt
-/cmake_install.cmake
-/Makefile
-/compile_commands.json
 
 # Editors and operating systems
 .DS_Store

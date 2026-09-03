@@ -6,21 +6,21 @@ library small, portable, and predictable for production use.
 ## Development requirements
 
 - A C++14-capable compiler (Clang, GCC, or MSVC)
-- CMake 3.16 or newer for the self-contained build and smoke test
-- Bazel 8 or newer to run the full reference-based test suite
+- Bazel 8 or newer
+
+Clone with `git clone --recurse-submodules` so the bundled KissFFT reference
+implementation is available to Bazel.
 
 ## Before opening a pull request
 
 1. Format changed C++ files with `clang-format`.
-2. Build and run the portable smoke test:
+2. Build the examples and benchmark:
 
    ```sh
-   cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
-   cmake --build build --parallel
-   ctest --test-dir build --output-on-failure
+   bazel build //src:main //src:fftBenchmark
    ```
 
-3. Run the full test suite when Bazel is available:
+3. Run the full test suite:
 
    ```sh
    bazel test //src:gtest --test_output=errors
