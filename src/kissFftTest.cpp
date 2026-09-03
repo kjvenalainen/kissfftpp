@@ -103,6 +103,7 @@ TEST(KissFftppInternal, Span) {
   constexpr kfft::span<const float> s1(data0, 5);      // Pointer and size.
   constexpr kfft::span<const float> s2(data0);         // Array.
   kfft::span<float> s3(data2);                         // std::vector.
+  kfft::span<const float> sVectorConst(data2);          // Const std::vector.
   constexpr auto s4(s0);                               // Copy.
   constexpr auto s5 = s0;                              // Copy-assign.
 
@@ -121,6 +122,10 @@ TEST(KissFftppInternal, Span) {
   EXPECT_EQ(s3.size(), 5);
   EXPECT_EQ(s3.data(), data2.data());
   EXPECT_EQ(s3[0], 10);
+
+  EXPECT_EQ(sVectorConst.size(), 5);
+  EXPECT_EQ(sVectorConst.data(), data2.data());
+  EXPECT_EQ(sVectorConst[0], 10);
 
   EXPECT_EQ(s4.size(), s0.size());
   EXPECT_EQ(s4.data(), s0.data());

@@ -117,7 +117,7 @@ class span {
   template <
       size_t _Extent = Extent,
       typename std::enable_if<_Extent == dynamic_extent, bool>::type = true>
-  constexpr span(std::vector<T>& vec) noexcept
+  constexpr span(std::vector<std::remove_const_t<T>>& vec) noexcept
       : ptr_(vec.data()), size_(vec.size()) {}
   constexpr span(const span&) noexcept = default;
   constexpr span& operator=(const span&) noexcept = default;
