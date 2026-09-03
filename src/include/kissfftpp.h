@@ -78,24 +78,26 @@ namespace kfft {
 // Same as std::dynamic_extent from C++20.
 constexpr size_t dynamic_extent = std::numeric_limits<std::size_t>::max();
 
+namespace internal {
+
+// Stores the span length while avoiding storage for statically sized spans.
+template <size_t Extent>
+struct span_extent_type {
+  constexpr explicit span_extent_type(size_t) noexcept {};
+  static constexpr size_t value_ = Extent;
+};
+
+template <>
+struct span_extent_type<dynamic_extent> {
+  constexpr explicit span_extent_type(size_t value) noexcept : value_(value) {};
+  size_t value_;
+};
+
+}  // namespace internal
+
 // Lightweight span implementation.
 template <typename T, size_t Extent = dynamic_extent>
 class span {
-  // Extent type to handle static extent, where the size is part of the type
-  // itself.
-  template <size_t E>
-  struct extent_type {
-    constexpr explicit extent_type(size_t) noexcept {};
-    static constexpr size_t value_ = E;
-  };
-
-  // Specialization for dynamic_extent.
-  template <>
-  struct extent_type<dynamic_extent> {
-    constexpr explicit extent_type(size_t value) noexcept : value_(value) {};
-    size_t value_;
-  };
-
  public:
   static constexpr std::size_t extent = Extent;
 
@@ -141,7 +143,7 @@ class span {
 
  private:
   T* ptr_;
-  extent_type<Extent> size_;
+  internal::span_extent_type<Extent> size_;
 };
 
 // Performs no scaling for forward or inverse FFTs.
@@ -342,7 +344,7 @@ static std::vector<size_t> Factorize(size_t N) {
 // Given a factorized FFT, compute the maximum required scratch array length for
 // the generic butterfly operations. If there are no generic butterflies, then
 // the scratch space required is 0.
-static constexpr size_t RequiredScratchLength(
+static size_t RequiredScratchLength(
     const std::vector<size_t>& factors) {
   constexpr std::array<size_t, 4> NON_GENERIC_BUTTERFLY_RADICES = {2, 3, 4, 5};
 
