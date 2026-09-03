@@ -84,9 +84,9 @@ The Bazel suite compares results against the bundled KissFFT reference
 implementation:
 
 ```sh
-bazel build //src:main //src:fftBenchmark
+bazel build -c opt //src:main //src:fftBenchmark
 bazel test //src:gtest --test_output=errors
-bazel run //src:fftBenchmark -- --iterations 1000
+bazel run //src:fftBenchmark -c opt -- --iterations 1000
 ```
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for the full contributor workflow.
